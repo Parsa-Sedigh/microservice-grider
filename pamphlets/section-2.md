@@ -165,3 +165,174 @@ inside the event and then assemble it into easy to access data structure.
 # 36-026 Parsing Incoming Events:
 
 # 37-027 Using the Query Service:
+So we have introduced a brand new service into our app, it's consuming events from these other services and it's using those events to populate some
+internal store of data and we did al this to make sure that we can minimize the number of reqs required.
+
+Also our query service doesn't have any dependencies(direct dependencies) on other services. So if the comments service and posts service are currently crashed,
+the query service is ok and we can still serve up data to users of our app without any issue. So the query service is independent.
+
+# 38-028 Adding a Simple Feature:
+
+# 39-029 Issues with Comment Filtering:
+option 1: moderation service communicates event creation to query service.
+A comment has 3 states. It can be approved, rejected or pending-moderation.
+Now what would happen if the moderation service took a long time to run? Maybe a human would decide on a comment to approve it or not.
+In this case(moderation process is not instantaneous), the flow is like this:
+A user is gonna submit a comment, comments service is gonna persist that comment and the comments service will emit an event and that event is gonna be sent over to 
+the moderation service from event-bus, where it's gonna await actual moderation. Now at that point in time, we're essentially paused in this workflow. Nothing else is 
+gonna happen anytime soon.
+Now think about UX. When a user refreshes a page or in case of ajax, after some seconds, they expect to see the new comment listed there immediately or at least sth 
+that says: hey, your comment is pending moderation or ... .
+
+So with the approach we're discussing right now, we're saying that after a user refreshes their page, they're not gonna immediately see that comment from the query 
+service right away. Because it's gonna take some time that the moderation service to process that comment and then tell the query service that there's this new comment.
+
+Pros:
+
+Cons: 
+- there is some delay between a user submitted a comment and that comment actually being persisted by the query service. So this entire flow could
+  potentially result ina user not seeing the info that they just submitted, easily.
+
+This idea of a user making a change and not seeing that immediately reflected, that's sth that's gonna come up all the time in this idea of microservices.
+But in this case, because of possibility of the moderation service being ran by an actual human, we're kind of exacerbating that problem.
+
+We're not go with this option.
+
+# 40-030 A Second Approach:
+option 2: moderation updates status at both comments and query service.
+We're still going to have a user submitted comment to the comments service. We're still going to have the comments service emit an event of sth like
+'CommentCreated' and ... . Event bus is still gonna send that event off to the moderation service, but now we're going to also have it go off to the 
+query service and actually be processed by the query service. As soon as the query service sees 'CommentCreated' we're going to have the query service
+persist some info about that comment and critically, it's also gonna have a default status of sth like 'pending'. 
+The query service is gonna instantly know about this comment, even if it takes some amount of time for the moderation service to process and actually moderate 
+the given comment.
+
+This option and also the previous option have a persistent issue:
+The job of query service is all about presentation logic. It's about making a query or storing some data and serving that data up quickly to users.
+So right now, it's really joining just two resources, posts and comments but in future it might join other resources. 
+This query service might take many different resources and jam them all together.
+
+So a question:
+Does it make sense for this presentation service to understand how to process this very precise update to a comment, like a 'CommentModerated' event?
+Does it make sense for the query service to understand how to process an event like this?
+No. In real world commenting system we would have:
+type: CommentModerated
+type: CommentUpvoted
+type: CommentDownvoted
+type: CommentPromoted
+type: CommentAnonymized
+type: CommentSearchable -> comment.searchable = true
+type: CommentAdvertised
+
+Each of these different precise updates to a comment has some very precise business logic associated with it to update the definition of that comment.
+So with this approach, the query service needs to understand how to handle this multitude of different possible updates that can be made to a 
+comment and imagine that if there were other services like our query service, maybe sth to process weekly updates to popular blog posts(which is done in 
+weekly update service) or maybe sth that functions as a recommendation service which receive the above events as well, if those had to store THE IDEA OF WHAT
+A COMMENT IS as well, in theory they might also have to handle these events. 
+
+So we start to get into this scenario where every possible way of changing a comment has to be handled by a ton of different services.
+So this approach is also not good.
+
+# 41-031 How to Handle Resource Updates:
+So the issue with the second approach is that we're allowing our query service to have a very deep understanding of what this 'CommentModerated' event is.
+To solve this, we're gonna have the CommentModerated be instead processed by the comments service.
+The comments service is the service that is in charge of exactly what a comment is and knows all the very precise business rules, all the business logic, 
+everything around what a comment is, how to update it and how to deal with is in some way.
+So comments service is responsible for updating a comment and deal with the mentioned types of events for updating a comment.
+Whenever the comments service updates a comment by handling one of these very specialized events, we're going to have emit one single, very generic
+event called 'CommentUpdated'. Whereas all the events that I mentioned above like CommentModerated, meant that we wanted to update a comment in some specific
+way, the CommentUpdated event says: Hey, there's a new comment right here(in the data of event) or a new version of this comment, don't worry about what 
+the update was. Don't worry about trying to interpret it, don't worry about trying to run some specialized business logic around it, just take these updated 
+attributes and store them if you need them.
+
+The service that is in charge of a basic resource, will be in charge of these very specialized updates and anytime those specialized updates occur,
+that service will emit a very generic event update.
+
+option 3 - query service only listens for update events. 
+We will have two events: One is gonna be very specialized in nature like CommentModerated event, it's gonna be processed by the comments service and then 
+as soon as the comments service updates that comment, it's gonna emit that generic event(CommentUpdated).
+
+# 42-032 Creating the Moderation Service:
+Create the moderation service. We don't need to install cors for this service because we're not gonna have our frontend app make any DIRECT req to this service.
+
+# 43-033 Adding Comment Moderation:
+
+# 44-034 Reminder about Node v15 and Error Catching:
+
+# 45-035 Handling Moderation:
+
+# 46-036 Updating Comment Content:
+CommentModerated event is emitted when the moderation service moderates a comment.
+
+# 47-037 A Quick Test:
+
+# 48-038 Rendering Comments by Status:
+To simulate the moderation process takes time, shut down the moderation service.
+
+There's a problem in our app. Since we turned off the moderation service, if we start up the moderation service again, in the time that the 
+service was down, the event broker(bus) tried to send an event over while the service which was interested in that event was down. So now we're in a scenario 
+where we had a temporary interruption to our moderation service but we lost events in that window and so now our entire app is kind of out of sync.
+We don't have any way to kinda fast forward ang get those missing events back over to our moderation service.
+
+#49-039 Dealing with Missing Events:
+Other than the case that a service goes down for some time, what happens if we're using this kind of event style approach and we don't bring up or we don't 
+even create a service until maybe sometime in future?
+For example maybe we had been running some services for days or years and they have tons of data inside them and they've all received tons of events.
+But maybe we only created a new service like one year down the line.
+How do we get that new service into sync?
+There are couple of options:
+1) sync reqs. 
+The instant we launch that new service, maybe we would have some code inside of the new service to make a direct network reqs over to the other
+services that were running for some time and say give me your data. Once it gets that data, it can make another req to other service that were running for
+some time.
+The downside is we're falling back to sync reqs. But the real downside is that we would have to have some code inside of the other services that were running
+for some time, just to service or kind of handle this new service that is coming online.
+So we need to implement an endpoint for those long running services.
+
+2) Direct DB access.
+This option is one exception to that rule that we said, which is for every service having it's own private DB. So the instant that the new service came 
+online, we could give it direct access to the data store or the DB for other services that it needs and were running for some time.
+Downside: 
+We're making sync reqs over, which means we're gonna have to implement some code inside of new service to work directly with whatever those DBs of other services
+are. Let's say one DB is mysql and other is mongodb. In this case, we need to write some code inside of the new service to interface with a mysql db and a mongodb
+db. That's a lot of code.
+
+3) Store events.
+The new service could work if it had access to all the events that had been emitted in the past.
+In this approach, whenever ANY of our services emits AN event whatsoever over to the event bus, the event bus will send that event out to all the other
+services, but it's gonna do sth else at the same time. It's gonna store that event internally(probably not in memory, instead in a DB, because this DB is 
+gonna grow to be very, very large over time).
+Upside: If a new service comes along or online at some point in future, we can say to event bus: Hey, give me access to all the events you have stored. Just throw them
+over and I'll(the new service) decide whether or not I care about them.
+So we can use all the SAME code that we've already written to handle these exact events that came from event-bus to sync this new service with other services.
+So we don't have to write any extra code.
+
+We're gonna use this option.
+
+So whenever we emit an event from a service, we're gonna store it with our event-bus so that if we ever bring a service online in the future, we can get
+access to all those events that occurred in the past.
+This also solves the issue with a service going down for some point in time.
+So after a service comes back online again, it can take a look at whatever the last event was that it received and it could say to the event-bus:
+hey, give me all the events during the time that I was down and event bus could say: Ok, you received (for example) event N, I'll give you everything since then.
+So I'll give you event N till the last one.
+
+So now the service that was down is all caught up.
+
+So this option not only does it solve the issue of bringing services online in the future, but it also solves the problem of events possibly
+being missed while a service is experiencing some amount of downtime.
+
+
+# 50-040 Required Node v15+ Update for Query Service:
+
+# 51-041 Implementing Event Sync:
+We're gonna take the query service down, then we're gonna create some posts and some comments as well. Then we're gonna launch the query service again and
+we're gonna try to make sure that the query service can reach out to the event-bus and tell it give me all the events that have occurred up to this point.
+
+Whenever our query service comes online and it starts listening on port 4002, right after that, it would probably a good time to make a req to event-bus 
+and get a listing of all the different events that have been emitted up until this point in time.
+
+# 52-042 Event Syncing in Action:
+Stop the query service server. Then create some posts and comments and those events will be stored by event-bus and then as soon as we launch query service, it 
+would resync and get all the events that it has missed over that time.
+
+
