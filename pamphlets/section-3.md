@@ -96,3 +96,92 @@ inside of our microservices apps.
 ## 56-004 Don't Know Docker_ Watch This:
 
 ## 57-005 Note About Docker Build Output and Buildkit:
+
+## 58-006 Dockerizing the Posts Service:
+In order to dockerize the posts service, we're gonna have to create an image out of it.
+
+To make an image, we make a dockerfile and then run the docker build command.
+
+In dockerfile, first we need to specify our base image, then we specify a working directory which is going to set the working directory for the REST of
+all the commands inside of our Dockerfile.
+The Dockerfile would be:
+```dockerfile
+# specify the base imgae
+FROM node:alpine
+
+# set the working directory to '/app' in the container. All FOLLOWING commands will be issued relative to this directory
+WORKDIR /app
+
+# copy over only the package.json
+COPY package.json ./
+
+# install all deps
+RUN npm install
+
+# copy over all of our remaining source code
+COPY ./ ./
+
+# set the default command to run when the container starts up
+CMD ['npm', 'start']
+```
+we usually don't want to include any installed deps that are on our local machine into the resulting image. 
+
+In order to make sure that we don't send all those deps over, during the image building process, we're gonna create the .dockerignore .
+That file is gonna make sure that during the image building process, we don't attempt to copy over that node_modules directory to the image.
+Because the image is gonna install all the relevant deps when it is being BUILT on it's own.
+
+Now run docker build . inside the posts directory.
+
+At the end of the logged build command, we get the id of the image that was just built. So we can now create an instance of that image or 
+in other words, a container, by copying that id and running: docker run <id of image> .
+
+## 59-007 Review Some Basic Commands:
+In docker build command, whenever a new image, we can add a -t flag which will tag the image that is created from the build command.
+If we add the -t flag , then we can easily create a new container out of that image, using EITHER the image ir or the image tag which was 
+specified by the -t flag when building the image.
+```shell
+# build an image based on the dockerfile in the current directory. Tag it as 'parsa/posts'(this name usually is: '<docker id>/<name of the project>').
+docker build -t parsa/posts .
+
+# create and start a container based on the provided image id or tag
+docker run [image id or image tag(in this case is: parsa/posts)]
+```
+
+Whenever we start up a container, we can either just use docker run by itself, or alternatively we can override the default command of the 
+container by providing both -i and -t flag and then type in the command that we want to execute instead of the default one of the container.
+For this, you can run:
+```shell
+docker run -it [image id or image tag] [the command to be used instead of the default one of the container]
+```
+So for example, we could start up a container and startup a shell inside there instead of actually running the default command(which in package.json
+is npm start). For this, we can run:
+```shell
+docker run -it <name of image> sh
+```
+
+We can use this command to print out information about all of the running containers:
+```shell
+docker ps
+```
+
+Once a container is running, we can execute arbitrary commands inside of it:
+```shell
+docker exec -it [container id] [arbitrary command that we want to run inside of container]
+```
+
+This will print out all the logs that have been emitted by the primary process INSIDE of that container.
+```shell
+docker logs <container id>
+```
+
+For example, if you run a container that is a nodejs project and has a default command of npm start, it would emit some logs over STDOUT.
+Now in a second terminal window, we can run: 
+```shell
+docker ps # the running container id that you want
+docker logs <the id that you got>
+```
+
+## 60-008 Important Note Regarding Node v17:
+
+## 61-009 Dockering Other Services:
+Now we want to use kubernetes to run all of the containers and get all those containers communicating together easily.
