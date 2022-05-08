@@ -689,3 +689,285 @@ which we supply to -t, is like the repository or the project name.
 ## ??-036 Quick Note for Windows Users:
 
 ## ??-037 Manual Image Generation with Docker Commit:
+You're not gonna ever do this.
+
+When building an image, we take an image form the previous step, we create a container out of it. We do sth with that container and then we create an image
+out of that running container(temporary container which was created)! Yes, we create an image out of that container.
+
+So we use images to create containers. But based on everything we learned, it seems like the opposite is kinda true as well.
+It seems like we can kinda take a container and generate an image out of it as well.
+
+**Learn:** We can manually create a container, run some commands inside of it(so we need to open a shell program inside the running container),
+or change it's filesystem and then generate a usable image that we can then use at 
+some point in the future. In other words, we can kinda very manually do the same thing that our dockerfile does.
+
+So let's kinda emulate the dockerfile that we created in the project of this section.
+We're gonna create a new container manually out of the alpine image. We're then going to install redis on it, we're then gonna set up a default command(using
+CMD instruction) and generate a usable image.
+Run:
+```shell
+docker run -it alpine sh
+```
+In above command, the image that we're gonna create a container out of it, is alpine. Now we get a command prompt inside that new container.
+Now inside that container, we're gonna manually install redis by running: apk add --update redis .
+So now we have a running container where we have modified it's filesystem and the filesystem has now seen the installation of redis.
+
+Now open a second terminal window and run this command which is gonna take a snapshot of that running container and assign a default
+command to it and generate an image out of the entire thing. But first we need to id of the running container that we want to create an image out of it with
+a default command for that image.
+By using -c flag on docker commit, it's gonna allow us to specify the default command
+```shell
+docker ps # to get the id of running container
+docker commit -c 'CMD ["redis-server"]' <id of running container>
+```
+The output is the id of the new image that we just customized for our own uses.
+
+Whenever you're making use of ids or hashes in the docker world, you don't have to copy the entire thing(id), you can just copy a SEGMENT of the start of 
+the hash and it's kinda assumed that this is gonna be unique enough. So just copy an arbitrary number of leading characters in hash of id.
+
+Now just use docker run to start up a new container out of the image that we just created and in this case, inside that running container, we already have 
+redis installed and the default starting command will be to run redis-server .
+
+So we just very manually created a container(in this case, out of the alpine image), added a dep(redis-server) to the container, set up the default command and then 
+generated an IMAGE OUT OF ALL THAT.
+
+Don't use docker commit in general, instead, you want to use dockerfile approach, because it allows you to easily RERUN that series of steps for creating an IMAGE, again,
+in the future. 
+So there is a kinda fluid relationship between containers and images.
+
+## ??-038 Project Outline:
+Steps:
+1) create a nodejs web app
+2) create a Dockerfile
+3) build image from Dockerfile
+4) run image as container
+5) connect to web app from a browser
+
+We're gonna make a couple of mistakes!
+
+## ??-039 Node Server Setup:
+In package.json and in dependencies section, "<dependency>: "*" means we can use any version of that dependency.
+
+## ??-040 A Few Planned Errors:
+The template we're gonna follow for our Dockerfile, is:
+1) specify a base image
+2) run some commands to install additional programs
+3) specify a command to run on container startup
+
+Now when we're working on redis image:
+1) FROM alpine
+2) RUN apk --update redis # we use this to install the dependency 
+3) CMD ["redis-server"] # set up the default command 
+
+for a node app, in it's Dockerfile, we can say:
+1) From alpine(no! should be from node) 
+2) RUN npm install # to install the deps
+3) CMD ["npm", "start"] # use this default command to start the server when the container first comes online
+
+BUT! By doing this, we get an error that says: /bin/sh: npm not found
+
+## ??-041 Required WORKDIR update - _Could not detect node name_, _idealTree_ errors:
+The v15 version of Node has recently been released and is causing issues with some of our project code.
+
+In the next lecture you may get the following error when building the Dockerfile:
+
+npm ERR! could not detect node name from path or package
+
+or
+
+npm ERR! idealTree already exists
+
+To resolve this, add a WORKDIR right after the FROM instruction: (we will be adding this very soon anyway)
+
+FROM node:alpine
+
+WORKDIR /usr/app
+Also, you will no longer get the error regarding the missing package.json as shown at around 7:16 in the video. With Node v15 / npm v7, if you run npm install in 
+a directory without a package.json, an empty package.json is now created for you and will no longer throw this error. However, 
+a properly written package.json listing your dependencies is still required to run a Node based application.
+
+## ??-042 Base Image Issues:
+When we have: /bin/sh: npm not found, it means there is no copy of npm available. We're seeing this, because we're using alpine as our base image.
+**Note:** Remember we said that we select our base image based upon the collection of default programs that we need to succesfully build our image.
+
+By default, alpine is a very small image, it's only about 5MB large and so it has a rather limited set of default programs included inside of it.
+What programs are included in the alpine image by default?
+Not much! You get a couple of very default linux or unix programs. You get that apk package manager. So when you're using the alpine image and you expect to run
+some fancy web app depending upon nodejs, or depending upon ruby or java, you need to do some additional setup.
+
+To solve the issue of npm not being available inside of our base image, we have two options:
+1) find a different base image
+OR:
+2) we can continue using the alpine image and run in additional commands to install node and npm
+
+We're gonna choose the first option. 
+Go to hub.docker.com then click on explore. Search for node. The one that you find, is a docker image that has node(and npm) preinstalled on it.
+
+You can get a specific version of it in Dockerfile by saying: FROM node:<specific version>
+
+If you search for alpine in the repository page of node image, you can find the one that only says: 'alpine'. It's just a tag, it doesn't mean that we're
+supposed to say: FROM alpine like we did before, instead, the first word actually would be the name of the repository which in this case is node and then
+you put a colon and then write the tag name.
+So in this case, it is: FROM node:alpine .
+
+Why would we do this? What is the purpose of alpine being tied onto node? 
+**Important**: Alpine is a term in the docker world for an image that is as small and compact as possible. Many popular repositories are gonna offer alpine 
+versions of their image. In alpine version of node in particular, you're not gonna get a bunch of additional preinstalled programs. So the default node 
+installation might include extra programs like git, or ... . 
+MAYBE, in node:alpine, you get the ping command(though you need to look at it's docs). Or MAYBE the cat program, simple text editor, ls program. 
+
+Also node:alpine, we would get npm program as well.
+
+Now if you try to re-build your image by running: docker build . .
+
+But we get an error that says: npm warn saveError ENOENT: no such file or directory, open /package.json . (The error is because the package.json
+file was not found. Was not found where? Inside the container, of course!)
+
+## ??-043 A Few Missing Files:
+When you're building an image, none of the files inside of your project directory are available inside the container dy default. They are all 100%
+sectioned off, completely segmented out and you cannot assume that any of these files are available unless you specifically allow them by writing some
+commands inside of your Dockerfile.
+
+We need to make our source code available inside the container when we try to run the npm install command.
+
+## ??-044 Copying Build Files:
+We need to make package.json and other necessary files available BEFORE npm install is executed inside of a container. So we need a new instruction above the
+RUN npm install command.
+To do so, we use COPY instruction. The anatomy of it is:
+COPY <x> <y>
+x: path to folder to copy on YOUR MACHINE relative to build context(you set build context when running the docker build <build context> command)
+y: place to copy stuff to inside THE CONTAINER
+
+**Note**: ./ here means the current working directory.
+
+This instruction is used to move files and folders from our local filesystem, to the filesystem inside of that temporary container that is created during
+the build process.
+
+Now run docker build . again. Or you can tag the image: docker build -t <docker id>/<name of the project> . . Note we didn't put the ':latest' at the end of 
+the tag, because :latest tag is automatically appended if you don't specify it in here.
+
+Now let's run the container our of the tagged image to run our server:
+docker run <docker id>/<name of the project>
+
+We still can't visit the server from our browser on the specified port.
+
+## ??-045 Reminder for Windows Home _ Docker Toolbox Students:
+
+## ??-046 Container Port Forwarding:
+By default NO traffic that is coming into your computer(localhost network) is routed into the container.
+So the contianer has it's own isolated set of ports that CAN receive traffic. But by default, no incoming traffic you your computer is gonna be directed into
+the container.
+In order to make sure that any req from either your computer or some outside computer will be redirected into the container,
+we have to set up a explicit port mapping.
+A port mapping says: Anytime that someone makes a req to a given port on your local(localhost) network, take that req and automatically forward it to some port inside the
+container. In other words if anyone makes a req to localhost:8080 , take that req, automatically forward it into the container on
+port 8080 where in this case, the node app can receive it and process the req and eventually respond to it.
+
+Important: This is only talking about INCOMING req. Your docker container can, by default, make reqs on it;s own behalf to the outside world, we've seen
+this already, anytime you've been installing a dep. For example when we ran npm install during the docker image build process, npm reaches to the
+outside world across the internet.
+So there's no limitation by default on your containers' ability ITSELF, to reach out. It's a limitation on the ability for incoming traffic to get into the 
+container.
+
+For port mapping, we don't make a change to Dockerfile, instead the docker run command that we execute. Because the port forwarding stuff is strictly a 
+runtime constraint. In other words, it's sth that we only change when we RUNT a container or start a container up.
+
+```shell
+docker run -p <p1>:<p2> <image id or tag>
+```
+p1: route incoming reqs to this port on LOCALHOST, to ...
+p2: ... this port inside the container.
+
+docker run -p 8080:8080 ...
+So this means, anytime a req comes into port 8080 on my local machine, redirect it to port 8080 inside the container.
+Now we're forwarding incoming reqs into the container.
+
+If you change the port inside the CONTAINER(not local machine) when mapping it at runtime with docker run -p , you need to make sure that your actual web server application
+which in this case is our index.js , we specify that our node app should listen on that new port.
+
+## ??-047 Specifying a Working Directory:
+if you ls into our project's container, you notice that we copied files like index.js into the root directory of the container.
+So we have a structure of files like:
+Dockerfile
+bin (folder)
+dev 
+etc
+index.js 
+node_modules
+...
+
+These are all places into the root directory(/) of the container.
+This is not the best practice and the reason is that if we happen to have any files or folders that conflict with a default folder system like if 
+in our project source, we have a folder called var or bin or lib(this one is likely) or ... , we might accidentally override some existing files or folders 
+inside the container which those folders were crucial to the system.
+
+So rather than copying everything directly into the root directory, we're gonna copy everything into kinda a nested directory instead.
+Now rather than just changing the COPY command in Dockerfile and saying: "Oh, yeah. Copy it into some like /application or ... ", there's actually an 
+instruction that we can use inside the Dockerfile that is SPECIFICALLY meant to address this whole issue right here of accidentally overwirting 
+files or folders by copying into the root directory.
+The instruction is:
+```dockerfile
+WORKDIR <path>
+```
+path: any FOLLOWING command(or instruction) will be executed relative to this path in the container. 
+For example if we had: WORKDIR /usr/app above the COPY ./ ./ instruction, it will make sure that when we do the COPY instruction, it 
+won't copy it into the / directory, it'll copy it into the directory that we specified as the working directory instead.
+If the specified folder for WORKDIR doesn't exist inside the container, it'll be created for us.
+
+Now exit the running container by running exit in the shell of that container. Then rebuild the image and then re-run it.
+When building the image again, because we made a change to an instruction above the COPY and npm install, everything after that new instruction 
+has to re-run from scratch, so they can not use any cache versions. So for example, npm install command has to run again and re-install all of our 
+deps.
+So run: 
+docker build -t <tag>
+docker run -p 8080:8080 <tag> 
+
+After verifying you can access the app using browser, start a shell inside the container and check if all of our project files are no longer in the 
+root directory of container. To do so, we can either rerun the docker run command with -it and sh program attached to it using docker run command or 
+**we can use docker exec to start up a second process inside of a running container**. So open a second terminal window and run the below command,
+but before that, get the id of running container.
+docker ps # get the id of container
+docker exec -it <id of container> sh
+
+Note: Now the shell program starts up DIRECTLY from the folder that you specified for WORKDIR. In this case, from /usr/app .
+
+**Note**:So that WORKDIR instruction, not only effects commands that are issued after it inside of our Dockerfile, it also affects commands that are executed
+inside the container later on through the docker exec command.
+
+## ??-048 Unnecessary Rebuilds:
+If you're running your project through docker and make a change to source code and then, in this case, if you refresh the browser to see the updated
+message that you api sent, the message won't get updated. Why?
+Remember anytime that we create our image or create the container out of the image, we're taking a snapshot of the filesystem after the filesystem 
+got copied over and we're running our app based on that old version of files. When we modify files inside our current working directory, that change is 
+not gonna automatically reflected inside the container. If we want it to update the file inside the container, we're gonna have to do some additional 
+fancy configuration. So for now, changes inside the source code of our machine, is not gonna be reflected inside the container.
+
+Now what we need to do to make the container get that new file that is changed?
+We would have to completely rebuild the image which is gonna copy the new changes.
+Currently, during the COPY instruction step in building process of the image, we're copying over ALL of our project files and folders. 
+If we make a change to only 1 file or many changes, the COPY instruction and every step after it has to be executed again. It includes the 
+npm install command, even though we didn't make a change to any deps. That's not ideal. We don't want to run npm install if we only make a change to
+our source code which doens't do anything with the list of deps.
+
+## ??-049 Minimizing Cache Busting and Rebuilds:
+We saw that in our case, making a change to the index.js and then re-building the image, caused the COPY step to be completely invalidated. Therefore, we 
+had to rerun COPY and every step after it, which means to run npm install again. We need to avoid completely re-installing our deps.
+
+To solve this, we're gonna split the COPY instruction into TWO DIFFERENT steps.
+The only thing that npm install requires in order to run successfully is the package.json file. That's all we care about, regarding installing deps. We don't care
+about the other source code.
+
+So during the first COPY, we only want to copy package.json from the host machine to the temporary container.
+**Note**: In COPY's first path, ./ means look at the directory specified by the build context argument of docker build.
+EX) COPY ./package.json ./ means look at the current working directory or look in the directory specified by the build context argument of docker build and find the 
+package.json file and then copy that into the current working directory of the container.
+
+Now the only time npm install is gonna executed again, is if we make a change to that step(RUN npm install step) or any step above it. So the REAL only effect is gonna have to
+rerun npm install, is if we make a change to package.json , which docker will see that.
+Now run docker build again, because we changed the Dockerfile, so the image needs to be regenerated.
+Now if you rerun the docker build again, it would run extremely fast, because docker were able to use the cached version of every single step.
+
+**Note**: If you make a change to any source code file(working directory files), you need to rebuild the image because we don't have any support for kind of hot reloading of 
+a project file into the running container. So we have to rebuild the image. But still docker will use the cached versions for temp containers of steps that are BEFORE the 
+changed step for this rebuild. The step that is different in the case of changing working directory files is COPY ./ ./ . So this step and next steps are not gonna 
+use the cached versions.
