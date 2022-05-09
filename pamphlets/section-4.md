@@ -19,3 +19,5 @@ To make sure kubernetes is running successfully, open a new terminal window(if y
 ```shell
 kubectl version
 ```
+
+## 64-
