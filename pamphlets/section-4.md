@@ -87,3 +87,37 @@ reach out to that containers DIRECTLY, it's going to instead just reach out to t
 So this k8s service is gonna make it easy for us to get from our event-bus and reach on out to our running pods. 
 
 ## 65-004 Important Kubernetes Terminology:
+- k8s cluster: It's a collection of nodes + a master to manage all those different nodes. Effectively, it's the entire set of infrastructure that's going to run our code.
+- node: a node is a virtual machine that's going to run all the different containers that we throw at our k8s cluster. A single cluster might have many, many nodes assigned
+  to it. It might only have one node. So right now, on our local computer, we're running a k8s cluster and by default, it has just one node,
+- pod: in the context of this course, we're gonna kinda use the term pod and container interchangeably. Technically a pod is sth that kinda wraps up a container and a 
+  pod can wrap up multiple different containers together. For us in this course, there's really a one to one mapping between pods and container.
+- deployment: deployments are gonna monitor a set of identical pods or pods that are meant to run the same container inside them. If anything ever happens to those 
+  pods, for example if the pod crashes or just stops running for any reason, the deployment is gonna see that and automatically restart that pod for us.
+- service: A K8S service(not microservice service), is sth that provides easy to remember URL, so that other running pods or containers inside of our cluster can easily
+  access another pod. There are several types of services 
+
+Note: We're in a course about micro-services, we're creating services that are programs, but we're also creating services in k8s that are sth totally different.
+Now when we say service, what do we mean? Application service? k8s service? 
+When we say service, it's always in the context of either k8s or some actual program that we're trying to run.
+
+## 66-005 Notes on Config Files:
+Let's look at config files we're gonna write to create actual pods, services and deployments. 
+
+K8S config files:
+- tell k8s about the different deployments, pods and services(referred to as 'Objects') that we want to create inside of our cluster. By the way, collectively,
+  we refer to deployments, pods and services and other similar things that we create in k8s, as Objects. So in other words, we're creating config files, to create and 
+  configure Objects.
+- Whenever you write a config file, we're always gonna store these files with our projects. In other words, we're gonna commit these to Git and make sure we store them in
+  some kind of source control. The reason for that is that these config files that we write, are really documentation of what our k8s cluster is doing.
+  The config files can tell another engineer who starts to look at your code, about the different deployments, services and pods that you have created and it's really the 
+  best documentation you're gonna have, to tell other enineer what your cluster is doing. 
+- with the last point in mind, it's possible to create these object things(an object is deployment, pod, service) without using fake files. So we can create Objects
+  WITHOUT config files, BUT DO NOT DO THIS. You should not create objects directly at the command line by writing in commands to create an Object. We're always going to
+  write out these config files because they're gonna be a source of documentation to tell you and other people in the future, exactly what is going on inside your cluster.
+  Because once you start to read the k8s docs, they're gonna tell you to run commands at your terminal to DIRECTLY create Objects without using any config file. ONLY follow
+  k8s docs for testing purposes and learning purposes. DO NOT create resources or Objects directly at the terminal in a production environment. There are a 
+  couple of exclusions to that rule. So use config files instead of directly using command lines. So use config files at all times!
+
+## 67-006 Creating a Pod:
+
