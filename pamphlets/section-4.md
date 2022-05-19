@@ -111,7 +111,7 @@ K8S config files:
 - Whenever you write a config file, we're always gonna store these files with our projects. In other words, we're gonna commit these to Git and make sure we store them in
   some kind of source control. The reason for that is that these config files that we write, are really documentation of what our k8s cluster is doing.
   The config files can tell another engineer who starts to look at your code, about the different deployments, services and pods that you have created and it's really the 
-  best documentation you're gonna have, to tell other enineer what your cluster is doing. 
+  best documentation you're gonna have, to tell other engineer what your cluster is doing. 
 - with the last point in mind, it's possible to create these object things(an object is deployment, pod, service) without using fake files. So we can create Objects
   WITHOUT config files, BUT DO NOT DO THIS. You should not create objects directly at the command line by writing in commands to create an Object. We're always going to
   write out these config files because they're gonna be a source of documentation to tell you and other people in the future, exactly what is going on inside your cluster.
@@ -120,4 +120,91 @@ K8S config files:
   couple of exclusions to that rule. So use config files instead of directly using command lines. So use config files at all times!
 
 ## 67-006 Creating a Pod:
+In the first k8s config file, we're gonna create a pod directly, so just a pod by itself, out of our posts service.
+For doing this, in posts directory, rebuild that posts service docker image and that's important that you REBUILD that image because we're
+gonna apply an additional label to it which is gonna help us identify it inside the configuration that we're about to write. SO run:
+```shell
+docker build -t <your docker id>/posts:<version number like 0.0.1> .
+```
+We used . to say I want to build this image out of this current directory of posts that we're currently in. Now we can refer to that image by using
+it's tag along with the version number.
+Now let's write the config file to create a pod using that image. 
+
+First create a new directory called infra(infrastructure), which is gonna contain all the configuration, all the code related to the deployment or management
+of all of our different services.
+```yaml
+kind: Pod # we want to create a pod
+metadata:
+  name: posts # we want it's name to be posts
+spec:
+  containers: # inside that pod, we want there to be exactly one container and it's name should be posts and we're gonna build that container using the specified image name
+    - name: posts
+      image: parsa7899/posts:001
+```
+Now we want to use kubectl command line tool to make use of this config file. 
+We're gonna tell k8s to use this config file to create a new object. Now cd to k8s folder and run command below to tell k8s that we want to use this 
+config file that we're going to write it's name:
+```shell
+kubectl apply -f <name of the config file>.yaml
+```
+You will only ever see errors coming out of this command if there is a typo in the config file, unless you're not running the k8s cluster at all, so k8s is 
+not running on your machine.
+
+To inspect the state of to figure out exactly what is ging on inside of our cluster, there are a variety of different commands we're gonna run with kubectl.
+
+In this case, we want to take a look at all the different pods that are running inside of our cluster, currently there should be one in our case:
+```shell
+kubectl get pods
+```
+The line that says: 
+READY
+1/1
+x/y means there are y copies of that pod that are trying to be executed and x copies are successfully running.
+68-
+That's how we create an object in k8s.
+
+We applied the config file to k8s and k8s uses this config file to decide what to do inside the cluster.
+
+## 68-007 ErrImagePull, ErrImageNeverPull and ImagePullBackoff Errors
+## 69-008 Understanding a Pod Spec:
+- apiVersion: v1 : It turns out k8s is really extensible. When you install k8s on your local machine, it comes with a pre-set list of different
+  objects we can create. So we can create things like pods, deployments, services and ... . We can also tell k8s about CUSTOM objects that we want to 
+  create as well. The goal of apiVersion is to tell k8s about the pool of objects that we want to draw from. In this case, we're telling k8s: "look at the
+  default `v1` k8s list of objects that we can create."
+  So k8s is extensible - we can add in our own custom objects. `apiVersion: v1` specifies the set of objects we want k8s to look at.
+- kind: Pod : With this, we specify the exact type of object that we want to create from that pool. In this case we want to create an object of type Pod and 
+  remember a pod is gonna wrap up a container and for our purposes, a pod is more or less like a container.
+- metadata: metadata is gonna include some different options, so we wanna apply to the object we're about to create. The most common option that 
+  we're gonna apply is the `name` property. So by saying name: posts in the metadata , we're saying that when this pod is created, we want the pod to be given a 
+  name of posts. With this given name to that pod, if we now run: 
+  ```shell
+  k get pods
+  ```
+  we see a pod named `posts` and this posts name is the metadata name property.
+- spec: is gonna have a list of confiuration options for the pod that we're about to create. This is a very precise defintion that controls exactly what
+  should be going on inside this pod and how the pod should behave.
+  - The only required property we have to put in the spec, is containers. Containers is gonna be an array. That's what the dash at the beginning of it meant.
+  - A dash means that we want ti add in a array entity. So we could technically have many containers inside that one pod, but in our case, we have just one. So one 
+    array entry which in this case consists of a name and image. So the one array entry in containers in our case is:
+      - name: ...
+        image: ...
+      - For that one array entry, we're gonna provide some configuration for that one container that's going to be created inside the pod. The container that's gonna be 
+        created will be given a name(in this case posts) as well.
+      - Note: The name properties don't really have a lot of big importance. You can provide a name of whatever makes sense to you. In this case, we gave the pod(with the
+        metadata name's property) and the container inside of it(by using the name property in containers property of spec) an identical name. Is that bad practice?
+        Not really, because our pod is only gonna be running one container(in our case). So it's kinda ok to have the pod and container have the exact same name.
+        The only real purpose of a name for us in the context of this course is to help us with debugging and understand exactly what pod we're looking at or 
+        what container we're working with.
+      - We also provide the `image` property and this is gonna be the exact tag applied to the image. 
+        - Note: If we do not provide a version at the very end, then docker will default to putting on `latest` in al scenarios(...:latest). If you ever apply or tried to 
+          create a pod that has :latest on the end or doesn't have anything which implies :latest , then k8s default behavior is to try to reach out to docker hub and find this
+          image listed on docker hub. If you haven't pushed that image to docker-hub, you would get an error.
+          By putting on an exact version, k8s is gonna say: I'm gonna assume that if this image is located on the computer that I'm running on, I'm just gonna
+          use that image directly. In other words, when it's :latest or an IMPLICIT :latest , which means that we don't have anything at all, k8s assumes that it 
+          needs to go out to docker-hub and try to find the latest image as opposed to using the image that is already on your computer. So by putting on that 
+          version, we're just saying: hey, if you find that version on the local computer, just use it, don't try to reach out to docker hub.
+        - Usually when we write a pod spec or a deployment spec, we're usually just gonna specify the image in the <docker id>/<name> and not worry too much 
+          about the version. So don't worry too much about putting the version here. We put the version to avoid errors coming up on the FIRST pod that we're creating.
+  
+## 70-009 Common Kubectl Commands:
 
