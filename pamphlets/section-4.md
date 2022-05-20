@@ -180,8 +180,8 @@ We applied the config file to k8s and k8s uses this config file to decide what t
   ```shell
   k get pods
   ```
-  we see a pod named `posts` and this posts name is the metadata name property.
-- spec: is gonna have a list of confiuration options for the pod that we're about to create. This is a very precise defintion that controls exactly what
+  we see a pod named `posts` and this posts name is the metadata's name property.
+- spec: is gonna have a list of configuration options for the pod that we're about to create. This is a very precise defintion that controls exactly what
   should be going on inside this pod and how the pod should behave.
   - The only required property we have to put in the spec, is containers. Containers is gonna be an array. That's what the dash at the beginning of it meant.
   - A dash means that we want ti add in a array entity. So we could technically have many containers inside that one pod, but in our case, we have just one. So one 
@@ -207,4 +207,82 @@ We applied the config file to k8s and k8s uses this config file to decide what t
           about the version. So don't worry too much about putting the version here. We put the version to avoid errors coming up on the FIRST pod that we're creating.
   
 ## 70-009 Common Kubectl Commands:
+A lot of docker commands translate directly into the k8s world.
+Remember: Docker in general is just about running individual containers. K8s is about running A BUNCH OF containers TOGETHER.
+Once we start making use of k8s, we're not raelly gonna use the docker command line tool much anymore. Instead, we're gonna use the command line tool that
+we use to interact with k8s which is kubectl.
+
+    docker world commands                                     k8s world
+        docker ps                             ----->             kubectl get pods 1
+        docker exec -it [container id] [cmd]  ----->             kubectl exec -it [pod_name] [cmd]  2
+        docker logs [container id]            ----->             kubectl logs [pod_name] 3
+                                                                 kubectl delete pod [pod_name] 4
+                                                                 kubectl apply -f [config file name] 5
+                                                                 kubectl describe pod [pod_name]
+1: Print out information about all of the running pods
+2: Execute the given command in a running pod
+3: Print out logs from the given pool.
+4: Delete the given pod.
+5: Tells k8s to process the config
+6: Print out some information about the running pod. Most importantly, it's gonna give us some debug information if we feel as though sth is going wrong with
+the pod.
+
+How we can create a pod?
+We do so by processing a config file which is done by the fourth command. So to process a config file and create all the pods designated inside there, we use
+kubectl apply -f and then the name of the config file with the yaml extension.
+
+We could start up a shell inside of a container that has been ran inside of a pod with:
+```shell
+kubectl exec -it [name of the pod, like posts] sh
+```
+
+Remember a pod can technically run more than one container inside of it at a time, if you ever are running multiple containers inside of a pod and run this
+kubectl exec ... command, kubectl will prompt you and ask you which container you want to run that command inside of. But again, in this course, we're ever gonna
+run one container inside of a pod at a time, so we don't really have to worry about that scenario.
+
+Note: For exiting from the prompt after running `kubectl exec -it ...` , you can write: exit to quit.
+
+When you run the command to delete a pod, although it says: "pod <pod name> deleted", it might take a couple of seconds for the deletion to actually be processed,
+all the way up to 10, so if it hangs for about 10 seconds or so, that's totally OK.
+After deletion of pod, you can run: `kubectl get pods` and we can recreate that deleted pod by running: `kubectl apply -f posts.yaml` , then run 
+another get pods command to confirm the pod was created from the config file.
+
+After running `kubectl describe pod [pod name]`, look at the bottom and at `Events` section which is the events log. So if sth is going wrong with the pod, 
+you will quickly want to describe the pod and look at the Events list.
+
+## 71-010 A Time-Saving Alias:
+Let's set up an alias on ur computer that anytime we write `k`, it will be automatically translated into kubectl. 
+The exact process of how you do this, is gonna vary based upon your computer setup. For example we can use a shell called zshell. This means that the
+program that is running inside of my terminal and interpreting the commands that I run, that program is called zshell. You might be using sth called bash instead.
+On zshell for making an alias do:
+1- open ~/.zshrc (or on bash, open ~/.bashrc)
+2- add: alias k="kubectl"
+
+## 72-011 Introducing Deployments:
+Turns out we usually do not create pods in the style of config file we did in the last vid.
+
+In the world of k8s, we have pods and those are intended to run some container which is running an image. Rather than creating these pods DIRECTLY however,
+we're usually gonna create sth called a deployment.
+**Learn**: A deployment is a k8s object that is intended to manage a set of pods. Each of these pods are gonna be identical in nature, that they will all be 
+running the SAME CONFIGURATION, SAME CONTAINER inside them.
+The deployment has two big jobs assigned to it:
+1) The deployment first off is gonna make sure that if any pod mysteriously just disappears for any reason, in other words, if the pod crashes for any reason,
+   then the deployment will automatically create that pod for us again. The deployment is gonna make sure that if we tell it: make sure there are 3 pods available running
+   the image, deployment is gonna say: I got it. I'm gonna make sure there are always exactly three pods running that image. That's the primary job of the deployment.
+2) The deployment is useful for this reason too: At some point in time, we're gonna decide to update the code inside of our different containers. In other words,
+   we might start off with all of our pods running a v1 of some application we put together. But then at some time we might tell the deployment that we want
+   to roll out a new version, like v2. The deployment is gonna take care of this update for us automatically. Behind the scenes, the deploument is gonna create
+   some number of new pods running this new version of our application. After these pods are up and running succesfully, the deployment is then gonna start to 
+   manage that set of pods. So it's gonna say: I'm now gonna manage these 3 pods and the deployment will start to sunset of essentially delete the old pods for us
+   automatically. So all of those old pods are gonna fade away once the new ones are up and running.
+   So we can think of the deployment as just being a manager, it manages a set of pods. 
+
+Understanding how to work with a deployment comes down to writing a config file and the commands we write in config file about deployments, at most the only 
+thing that we're ever gonna do with them is to list out the deployments we have and then try to inspect their status. 
+Deployments don't actually run any of our code or anything like that, so we're not really gonna ever have to try to run some command in the context of the 
+deployment or really try to fetch some logs from it or sth like that. Instead, we really just want to list them out, take a look at their status.
+
+So we want to create a deployment by writing a config file and tell it to run our posts application inside of a set of pods.
+
+## 73-012 Creating a Deployment:
 
