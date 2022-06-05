@@ -777,7 +777,41 @@ Then apply that changed config file with kubectl apply. Then run `kubectl get se
 Now we need to write these stuff up and then our two pods(event-bus and posts) will be able to communicate with each other easily. 
 
 ## 82-022 How to Communicate Between Services:
+When we want to access event-bus by writing: http://localhost:4005 , this only works correctly when we were running the event-bus on our local machine and
+not inside of, say k8s. K8s right now technically is on our local machine but you know what I mean!
+So we can no longer reach out to http://localhost:4005 to get at our event-bus. Instead, we need to figure out how we're gonna reach over and make a req to 
+the cluster IP service of the other pod and hopefully that thing will forward the req on to the other pod.
+So what is the url of other pod's related cluster IP service's URL address?
+The url is gonna be the name of that cluster IP service. We can retrieve the exact name of that cluster IP service by running:
+```shell
+kubectl get services
+```
+For example, we can reach from posts pod to event-bus related cluster IP service with: http://event-bus-srv:4005 . Look at 78-018-4 .
 
+**Note:** Anytime that we want to have some communication between pods, we're always gonna create a cluster IP service for the pod we're trying to reach out to.
+Once we have created that cluster IP service, to make a req to it, we're gonna write a URL of http://<name of the cluster IP service> .
 
+## 83-023 Updating Service Addresses:
+After changing the urls, we need to rebuild the images and update our deployments, so that they are running that new changed code.
 
+Currently if you try to send req from event-bus(which is inside a pod) to other services that aren't inside a pod, you would get an error. So you can comment
+them for now.
 
+We changed the urls of microservices, now we need to deploy the microservices that are using the right urls to send req to other services(microservice service).
+In other words, we need to update deployments.
+So update the deployment for evnet-bus and posts apps.
+After updating both, run rollout command of kubectl to restart deployment for both deployments by running:
+```shell
+kubectl rollout restart deployment [name of deployment]
+```
+
+You can get the name of deployments by running: `kubectl get deployments`
+
+Then list out all your pods and make sure that they both just got restart by looking at their AGE. If you run the command for getting all pods quickly enough, you may
+see the old pod! Like it's in Terminating status and another one which is just like that is in Running status. So you may have more pods that the expected number of pods,
+because the pods replaced with new ones and the old ones take some time to shut down and get replaced. So you may get n + 1 pods instead of n pods if you run the get pods
+command quickly enough.
+
+Now open up postman and manually create a post to see if the post microservice works.
+
+## 84-024 Verifying Communication:
