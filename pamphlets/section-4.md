@@ -621,10 +621,10 @@ set of elements easily.
 The `ports` section in config file of that posts-srv.yaml is gonna list out all the different ports that we want to expose on a target pod.
 Recall that in the posts service(posts application) we are using port 4000 . So inside of the k8s service we need to expose port 4000 for posts application.
 
-`ports` is gonna be an array of entires and we set up an array in yaml by putting a dash in the beginning.
+`ports` is gonna be an array of entries and we set up an array in yaml by putting a dash in the beginning.
 
 In the ports array, why we're listing port and targetPort? What is the difference between port and targetPort?
-Look at img 78-018-4 .
+Look at img 78-018-1 .
 Target port is the actual port that our application is listening for traffic on. That's where we ULTIMATELY want to send traffic to.
 Now the node port service is gonna have a port of it's own and that port is simply referred to as 'port'.
 So we're sending traffic to port 4000 on a node port service and that service internally is gonna redirect that traffic over to port 4000 on the container itself.
@@ -681,4 +681,103 @@ the other pods for our other services(event-bus service, comments service and ..
 as well.
 
 ## 79-019 Setting Up Cluster IP Services:
+**Note:** The goal of a cluster IP service is to expose a pod to other pods inside the cluster.
+
+Let's create a new pod that is going to run event-bus , we're then going to set up some services to allow posts and event-bus to communicate with each other,
+Look at 78-018-3 image.
+In part of the application that is shown in the diagram, we have one node, we currently have a podd running our posts app and soon, we're gonna set up a second pod 
+to run all the event-bus code. These two pods are gonna have to somehow communicate with each other. Now unfortunately, these pods CANNOT just reach out DIRECTLY to each other.
+They technically can, but there are a variety of reasons that we don't do so. For example, we never really know a head of time what IP address a pod is going to be assigned and
+so we can't just reach out to, say, localhost:xxxx . Because that pod will not be accessible at localhost. Instead, it gets assigned more or less a random 
+ip address inside of our k8s cluster and that event-bus will not know A HEAD OF TIME, what that IP address(of posts pod) is. That's why we have to communicate between
+these pods through those cluster IP services.
+
+**Important:** So pods communicate with each other through each other's cluster IP service.
+
+The posts pod is gonna want to reach out and send a message over to the event-bus, but we can't reach out DIRECTLY. Instead, we're gonna create a cluster IP service that's
+gonna govern access to the event-bus pod.
+
+## 80-020 Building a Deployment for the Event Bus:
+So now we need to create another deployment that's gonna create that event-bus pod. Then create one cluster IP service for posts and one for event-bus.
+
+To get event-bus and posts pods working together, we got to do:
+1) build an image for event-bus
+2) push the image to docker hub
+3) create a deployment for event-bus(that deployment is gonna create one pod for us automatically)
+4) create a cluster IP service for event-bus and posts(the cluster IP services are gonna teach those pods how to access each other inside the cluster)
+5) write it all up!
+
+To do this, go to event-bus directory and run:
+```shell
+docker build -t <docker id>/event-bus . # dot means we want to use current working directory for all the source code inside the image we're gonna build
+```
+Now push the image up to docker hub so that the deployment can easily pull down that image when it decides that it's time to create the pod. So run(better to be in
+the directory where the dockerfile related to that built image, exists):
+```shell
+docker push <name of the built image>
+```
+Now for creating deployment for event-bus, we're gonna create a config file. So create event-bus-depl.yaml .
+Then apply that configuration file to k8s using kubectl. So first cd to k8s directory and run:
+```shell
+kubectl apply -f event-bus-depl.yaml
+```
+Then it should say: deployment.apps/event-bus-depl created
+So the deployment is created and that should automatically create the pod for us.
+Let's just list out all of the different pods and make sure that a new pod related to event-bus was created:
+```shell
+kubectl get pods
+```
+
+Currently, we have no effective way to have any communication between that event-bus pod and the posts pod and so that is why we need to add in
+cluster IP services for posts and event-bus pods. Again, they technically can communicate, but the IP address assigned to these pods is variable and we can't
+predict it ahead of time. The cluster IP services are gonna give us a well known, easy to predict URL that we can type in any time we want to have our
+event-bus communicate over to posts or vice-versa.
+
+## 81-021 Adding ClusterIP Services:
+We can either create two new files to house those two cluster IP services or alternatively, we can just write out the configuration for each cluster IP service directly into the
+appropriate deployment file.
+
+It's good to colocate our deployment config and the IP service that MAPS to it and the reason for that is that we usually end up with a ONE TO ONE MAPPING BETWEEN
+CLUSTER IP SERVICES AND THE DEPLOYMENTS that they are allowing access to. So it makes sense to colocate all those stuff(deployment and cluster IP service).
+Another approach is to create a separate file foe every single object inside their k8s cluster.
+
+With approach #1, we write the config for cluster IP service inside the related k8s depl files.
+
+Now because we wanna create multiple k8s objects inside a single yaml file, we add on `---`.
+
+In the case of service object, the `selector` inside spec property is gonna tell the service what pods it is going to allow access to. 
+
+In case of event-bus-srv , we wanna tell the service to direct any incoming traffic to the pod with a label of `app: event-bus` , so this is the label
+that we're gonna look for in the event-bus service.
+
+Next, we can optionally specify a type of `ClusterIP`. The reason I say optionally, is that if we do not specify a `type` for the SERVICE, k8s will default to 
+creating a ClusterIP service for us. So we can remove that type: ClusterIP if we want to and we will still get a ClusterIP service.
+
+Now about ports section of cluster ip for event-bus: We know that the event-bus APPLICATION is listening to incoming traffic on port 4005. So we specify a port
+of 4005 in the port configuration of that cluster ip service.
+
+Now apply the changed config file with k8s `apply` command.
+
+Now run:
+```shell
+kubectl get services
+```
+You should have a event-bus-srv.
+
+Now we need to repeat the same process for posts.
+For posts, we already created a node port service for posts and it's already using the name `posts-srv`. So we just need to aware that once we create a second
+service which is going to direct to that posts pod(so we would have a cluster ip service in addition to node port which already points to posts), we just need to use a 
+slightly different name. Otherwise k8s is gonna think that we want to try to change the existing node port service into a cluster ip.
+
+So in the posts-depl.yaml , create another object as a cluster ip service.
+
+The posts application server is listening on port 4000. So we need to use that port for cluster ip service.
+Then apply that changed config file with kubectl apply. Then run `kubectl get services`.
+
+Now we need to write these stuff up and then our two pods(event-bus and posts) will be able to communicate with each other easily. 
+
+## 82-022 How to Communicate Between Services:
+
+
+
 
