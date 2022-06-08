@@ -1002,5 +1002,10 @@ routing rules or having some routing config that's gonna send req off to the app
 Now we're gonna look at a very specific implemeentation of an ingress controller that we're gonna use inside our app.
 
 ## 89-029 Update on Ingress Nginx Mandatory Commands:
+In the upcoming lecture, we will be installing Ingress Nginx. In the video, it is shown that there is a required mandatory command that
+needed to be run for all providers. This has since been removed, so, the provider-specific commands (Docker Desktop, Minikube, etc) are all that is required.
 
+https://kubernetes.github.io/ingress-nginx/deploy/#provider-specific-steps
+
+## 90-030 Installing Ingress-Nginx:
 
