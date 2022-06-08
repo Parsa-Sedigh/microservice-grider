@@ -799,7 +799,7 @@ them for now.
 
 We changed the urls of microservices, now we need to deploy the microservices that are using the right urls to send req to other services(microservice service).
 In other words, we need to update deployments.
-So update the deployment for evnet-bus and posts apps.
+So update the deployment for event-bus and posts apps.
 After updating both, run rollout command of kubectl to restart deployment for both deployments by running:
 ```shell
 kubectl rollout restart deployment [name of deployment]
@@ -815,3 +815,192 @@ command quickly enough.
 Now open up postman and manually create a post to see if the post microservice works.
 
 ## 84-024 Verifying Communication:
+For verifying the communication between posts pod and event-bus pod, we're gonna send a req to posts application to create a post.
+So send a req(try to access) to node port service that's governing access to the posts pod and we know that if we're trying to access
+some pod that is running inside of our cluster, we can use a node port service and we typically only use those for development purposes
+and to access node port, we have to use the randomly assigned port that usually starts with 3xxxx and that port is named nodePort port(look at 84-024-1)
+and the actual URL that we're gonna use depends upon whether you're using docker for mac/windows or docker toolbox with minikube.
+If you're using minikube, you will run minikube IP and that will give you the IP address that you're gonna make your req to, otherwise
+if you're on docker for mac/windows , you will use localhost as the url. (Look at 78-018-2). (When you're using minikube, you will
+not have localhost).
+To get the port that we need to make the req to, we can rerun `kubectl get services` and look at the right hand side PORT of the service
+you want to make a req to.
+Put `Content-Type: application/json` at the header of req and make sure the body is selected as JSON in postman.
+We can use a node port service and we typically only use those for development purposes
+and to access node port, we have to use the randomly assigned port that usually starts with 3xxxx and that port is named nodePort port(look at 84-024-1)
+and the actual URL that we're gonna use depends upon whether you're using docker for mac/windows or docker toolbox with minikube.
+If you're using minikube, you will run minikube IP and that will give you the IP address that you're gonna make your req to, otherwise
+if you're on docker for mac/windows , you will use localhost as the url. (Look at 78-018-2). (When you're using minikube, you will
+not have localhost).
+To get the port that we need to make the req to, we can rerun `kubectl get services` and look at the right side of colon of PORT column of the service
+you want to make a req to.
+
+Now look at the logs at posts pod and event-bus pod by first getting your pods and then look at the logs inside them:
+```shell
+kubectl get pods
+kubectl logs [pod name from first command]
+```
+
+The flow for creating a post till now is like this:
+When we created that post, our posts pod sent the message(post created event) to the event-bus through the event bus service(event-bus-srv). Then the event bus took
+that event and emitted to all the different services that are running inside our cluster(currently we have only posts cluster ip service other than event-bus-srv).
+That means we were able to send a message to the event bus and receive a message from event-bus as well.
+
+Now we're gonna create deployments and cluster IP services for comments, moderation and ... .
+
+## 85-025 Adding Query, Moderation and Comments:
+Look at 85-025-1.
+For each of our microservices, we're gonna do the steps mentioned in image.
+
+Step 1 for comments micro service:
+Replace urls that it sends reqs to. For example change http://localhost:4005 to http://event-bus-srv:4005 and other urls accordiong to our k8s services.
+
+After doing step #1 for each of the services, now they are all attempting to reach out to the event-bus cluster ip service. 
+Note: The port of cluster IP service for event-bus is 4005.
+
+Now we need to go to the root of other services that don't have deployment set up and build images out of each of them and push them up to docker hub.
+For example go to comments service and run:
+```shell
+docker build -t <docker id>/comments .
+docker push <docker id>/comments
+```
+and repeat this for other microservices.
+
+We have done 2 steps.
+
+For step 3 for comments microservice:
+Create a file called comments-depl.yaml and write the config. You can copy the event-bus-depl.yaml code which includes the config for depl and for related cluster IP service.
+Don't forget about the right port to use.
+
+Note: We have put the deployment and cluster IP services in one single file for our microservices.
+
+After creating the depl and cluster IP config for each of our microservices, we need to apply those config files to cluster.
+So run command below for all of the files that haven't been applied(first you need to cd to k8s directory). To apply multiple config files with
+one single command(you must be in directory where the config files exist or pass the path to that folder in command instead of dot):
+```shell
+kubectl apply -f . 
+```
+Here dot means find all the different config files inside of the CURRENT WORKING DIRECTORY.
+
+For verifying:
+```shell
+k get pods
+```
+All of them should have a STATUS of Running.
+
+If you see a status other that Running, like `ErrImageBackOff` or `ErrImagePull, the first thing to do to debug it, is to copy the pod's name and run:
+```shell
+k describe pod [name of the pod]
+```
+
+To make sure services are created: `k get services`.
+
+Now we need to update the event-bus to once again, send events to other services as well.
+
+## 86-026 Testing Communication:
+Update urls in event bus service code. So instead of localhost in url, we need to reach out to direct CLUSTER IP SERVICES. If we evenr forget the names of those
+cluster ip services, run: `k get services`.
+
+---
+**Note:** After changing the code, rebuild it's image, then run `docker push <docker id>/name` then finally command below to update the related deployment:
+`k rollout restart deployment [depl name]`. You can get the name of deployment to update by runningL `k get deployments`.
+Then run `k get pods` and make sure the related pod was updated by looking at it's age. The old pod for it would have a STATUS of Terminated and new pod 
+would have a status of Running with a little AGE. After some time the Terminated pod would get cleaned up.
+So the commands would be:
+```shell
+docker build -t <docker id>/<some name> .
+docker push <image name>
+k rollout restart deployment [depl name]
+k get pods #  for verifying
+```
+---
+
+For testing, in postman send some req and see the logs inside the event-bus app pod.
+To check logs: `k logs [name of the pod we want the logs from]`.
+
+**Note:** Remember to use FROM node:18-alpine3.14 in your dockerfile if for example you're using node v18.
+
+## 87-027 Load Balancer Services:
+Now we need to integrate the react app into our cluster.
+
+Our react application is actually the create react app development server. We're gonna house it inside of a pod, so we're gonna create a new docker image for(or ?)
+our react application or the development server. Then we're gonna create a container inside of a pod and place it inside of our cluster.
+
+What does the react dev server does?
+Whenever a user opens up his browser and navigates to our app, we're gonna be attempting to connect to that react dev server. The only goal of that 
+dev server is to take code that we write inside of our react app and then generate some HTML, JS and css files out of it. So during the initial navigation attempt
+to our application running inside that cluster, the only thing that react dev server is doing, is returning some html, css and JS. What that react dev server is NOT
+doing, is making any reqs at any point in time, over to posts, comments or ... . The actual req for data, are being issued from the user's browser. 
+So we send over that html, css and js stuff, then the react app boots up inside the user's browser and then INSIDE of the browser, the react app is gonna try to 
+reach out to the query service and get some posts and comments.
+After serving up the initial html, css and js, the development server is no longer relevant whatsover. 
+
+So no reqs are being issued from that dev server directly to our other pods. All those reqs are coming from the browser. Look at 87-027-1 .
+This opens up a question: How are we gonna make sure that the react app can somehow make reqs to all of those different pods?
+To make sure that the react app can reach out to all those pods and the containers running inside them, we have two options available to us.
+One is pretty bad and we're not gonna do it which is we could create a node port service for posts, comments, query and moderation. Look at 87-027-2.
+Remember that a node port service is gonna expose a pod to the outside world or to traffic outside the cluster. So inside of our react app, we could write out
+some code that would make reqs to those different node port services and access the underlying pods to get all the information that is required.
+The reason this is not a good approach, is that remember, when we create a node port service, we're essentially opening up a random port, we can't technically specify
+an EXACT port and so if we ever changed a node port, there's the possibility that who knows, maybe the port that we get assigned would be different. So we would go 
+back to the react app and change the port inside of our code and update it to reflect the new node port. There other other reasons as well.
+
+Rather than trying to expose all our pods using node ports, we're gonna take a look at load balancer service. We use this approach in production env and in a dev
+env.
+Look at 87-027-3 . 
+
+The goal of this load balancer service is to have one single point of entry into our entire cluster. Then we're gonna make sure that our react app is gonna make reqs to acccess
+that load balancer service and then we're gonna place some logic(actual code or configuration) inside of that load balancer service, that's gonna take those incoming
+reqs and then route them off to the appropriate cluster IP service that we have for each of our pods.
+
+So the react app(req of the react app) is gonna reach out(send req) to load balancer, req gets forwared on to the appropriate pod(actually the appropriate cluster IP service of
+that pod), response comes through the load balancer and back to the react app. 
+
+## 88-028 Load Balancers and Ingress:
+We said that we needed a load balancer service to somehow get traffic into all of our different pods.
+When we talk about a load balancer service, we're really talking about two distinct things in the world of k8s(look at 88-028-1):
+First off, there's sth in k8s, called a load balancer service. There is sth that is also very closely related that is referred to as ingress or 
+an ingress controller. Technically an ingress and ingress controller are two different things, but for the purposes of this course, we're gonna kind of refer
+to them with interchangeable terms.
+
+- A load balancer service is gonna be sth that tells k8s or specifically our cluster, to reach out to it's provider and provision a load balancer.
+  The goal of a load balancer service is to get traffic into a single pod.
+- On the other hand, an ingress or ingress controller(again technically different things, but we're gonna use these terms interchangeably) is a pod that has a
+  set of routing rules in it that are gonna distribute traffic to other services inside of our cluster.
+
+Let's image we're running one singular pod called 'some pod' inside of our cluster. Our cluster at some point in the future(not now because it's on our 
+local machine), is gonna be running on some cloud provider, like aws, google cloud. We're going to want to somehow get traffic or network reqs from the outside world
+to some pod inside of our cluster. So how do we do that using a load balancer?
+We would create a config file for a load balancer service. We would then feed that thing into our cluster using that same `kubectl apply` command.
+Now a load balancer service is a very special little thing. Just about all the objects we've talked till now on k8s, has been all about stuff that gets created directly inside 
+of our cluster. For example we have created services inside the cluster, pods inside the cluster, deployments, but a load balancer service is a little bit different.
+A load balancer service is gonna tell our cluster to reach out to it's cloud provider. So reach out directly to aws or ... and provision sth called a load balancer.
+This load balancer exists completely OUTSIDE of our cluster, it is a part of google cloud or ... .
+This load balancer is gonna be used to take traffic from the outside world and direct it in to some pod inside of our cluster.
+So the goal of a load balancer service is to tell cluster to reach out to it's provider, provision a load balancer(not a load balancer SERVICE!) with the goal of getting 
+some traffic into a pod on our cluster.
+A load balancer(not a load balancer SERVICE!) by itself is not useful for us right now. Instead, what we really want to do, is we want to get traffic 
+distributed to a SET of different pods and we want to have some routing rules inside of sth to decide where to send this traffic to?
+
+Note: Our react app doesn't want to uderstand the different between for example the query pod, comments pod and posts pod. We don't want to have to encode that info
+inside the react. Instead, what would be great, is if we can just say: Make a req to this route and if there was sth around our cluster to figure out
+what pod that req should be forward to?
+So the load balancer just by itself, is not really doing the full thing for us, it's not doing everything we need and that is where the idea of an ingress or ingress
+controller is gonna come.
+Ingress or a ingress controller is a pod that has a set of routing rules inside of it. It's gonna work alongside that load balancer service.
+
+Look at 88-028-2.
+In the diagram we have our cluster which is the blue box and is being hosted with some cloud provider and we want to get some outside traffic into thos e
+set of different pods.
+A req is gonna coming in still to a load balancer that has been provisioned with our cloud provider. But now, that load balancer is gonna send that req on to the
+ingress controller thing and that ingress controller thing is gonna have a set of routing rules inside of it. The rules means ingress would look at the path of req and 
+then decide upon that path, whether to send the req on to that pod(actually send it to some cluster IP service that is send req onto the pod) or the other one.
+(We're not showing the cluster IP services in the pod.)
+That is the relationship between load balancer and ingress controller. The load balancer is just about getting traffic into our cluster. The ingress thing is about
+routing rules or having some routing config that's gonna send req off to the appropriate cluster IP service which then gonna forward it to the related pod.
+
+Now we're gonna look at a very specific implemeentation of an ingress controller that we're gonna use inside our app.
+
+## 89-029 Update on Ingress Nginx Mandatory Commands:
+
+
