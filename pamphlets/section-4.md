@@ -999,7 +999,7 @@ then decide upon that path, whether to send the req on to that pod(actually send
 That is the relationship between load balancer and ingress controller. The load balancer is just about getting traffic into our cluster. The ingress thing is about
 routing rules or having some routing config that's gonna send req off to the appropriate cluster IP service which then gonna forward it to the related pod.
 
-Now we're gonna look at a very specific implemeentation of an ingress controller that we're gonna use inside our app.
+Now we're gonna look at a very specific implementation of an ingress controller that we're gonna use inside our app.
 
 ## 89-029 Update on Ingress Nginx Mandatory Commands:
 In the upcoming lecture, we will be installing Ingress Nginx. In the video, it is shown that there is a required mandatory command that
@@ -1008,4 +1008,246 @@ needed to be run for all providers. This has since been removed, so, the provide
 https://kubernetes.github.io/ingress-nginx/deploy/#provider-specific-steps
 
 ## 90-030 Installing Ingress-Nginx:
+Ingress nginx: A project that will create a load balancer service + an ingress for us.
+We're using ingress nginx. There is another project that does the same thing with an almost identical name which is named kubernetes-ingress.
+These are very different projects. In the docs, go to deployment > installation guide.
+
+Note: The kubectl apply -f <yaml config file>, is gonna take a config file and throw it into a cluster. You can also use this command to isntall packages for
+your cluster. But first, take a look at that config file you want to apply to your cluster and understand it.
+
+Note: A deployment is sth that creates and manages a set of pods.
+
+Run:
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.2.0/deploy/static/provider/cloud/deploy.yaml
+to use nginx-ingress.
+
+Don't use the 'for development' section on docs because that's for developing the ingress-nginx. 
+
+Now we've added load balancer and ingress controller to our cluster but not yet set up any routing rules or anything like that around our ingress controller.
+
+## 91-031 Ingress v1 API Required Update:
+When running kubectl apply in the upcoming lecture, you may encounter a warning or error about the v1beta1 API version that is being used.
+
+The v1 Ingress API is now required as of Kubernetes v1.22 and the v1beta1 will no longer work.
+
+Only a few very minor changes are needed:
+
+https://kubernetes.io/docs/concepts/services-networking/ingress/
+
+Notably, a pathType needs to be added, and how we specify the backend service name and port has changed:
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+name: ingress-srv
+annotations:
+kubernetes.io/ingress.class: nginx
+spec:
+rules:
+- host: posts.com
+http:
+paths:
+  - path: /posts
+pathType: Prefix
+backend:
+  service:
+     name: posts-clusterip-srv
+     port:
+     number: 4000
+  We will include a separate v1 Ingress manifest attached to each appropriate lecture throughout the course so that students can refer to the changes.
+
+## 92-032 Writing Ingress Config Files:
+Look at 92-032-1.
+
+We have now created a ingress controller through ingress nginx, inside of our cluster. Now we need to teach this thing a couple of routing rules and tell it
+how to take incoming reqs and send them off to some appropriate pods(actually the cluster IP services). We do that by writing a config file that's gonna contain some
+router rules. Then we feed that into our cluster where it will be automatically discovered by the ingress controller. The ingress controller is then gonna 
+update it's own internal set of routing rules to match the ones we just gave it.
+
+So create a file named ingress-srv.yaml in k8s directory.
+
+annotaitons key is important in there. 
+This entire section of annotations:
+annotations:
+    kubernetes.io/ingress.class: nginx
+is what's gonna help the ingress controller, understand that we're trying to feed it some routing rules. So the ingress controller is gonna continously scan all the
+different objects or all the different config files that we're throwing into our cluster and it's gonna try to find one that has this exact annotation that we specified.
+When it finds that, the ingress controller is gonna say: Oh, this thing must have some routing rules for me.
+
+The `rules` inside `spec`, is gonna have all the different routing RULES that we want to apply to teach the ingress controller how to take incoming
+traffic and route them up toward different parts. `rules` is gonna be an array.
+
+**Note:** To designate an array entry in yaml, we use a dash at the beginning.
+
+The first routing rule that we're gonna set up, is gonna take incoming traffic and send it off to our posts service. Now take a look at posts micorservice code.
+There, we expect to get traffic on the route of '/posts'. So we're gonna make sure that if any req is coming into our app with a path of '/posts',
+we're gonna send it off to our posts microservice. To do so, we're not gonna send it directly to the posts pod or anything like that, instead, we're gonna send it to the
+posts cluster IP service, because remember these cluster IP services are how we communicate between things INSIDE of our cluster.
+To write that we say:
+path: /posts
+backend: 
+    serviceName: posts-clusterip-srv
+    servicePort: 4000
+BUTTTT!!!! The new syntax is:
+path: /posts
+  pathType: Prefix
+  backend:
+     service:
+        name: posts-clusterip-srv
+        port:
+           number: 4000 (the port inside the app that we're listening on)
+
+Now apply that new config file by going to the directory where that config file exists and run: `k apply -f <name of config file for ingress>` and you will
+see sth like 'created'.
+
+Now, in theory we have updated configuration of that ingress controller. But how do we test this out? (It comes back to the host property that we specified earlier.) 
+
+## 93-033 Important Note About Port 80:
+In the upcoming lecture, we will be editing our hosts file so that we can access posts.com/posts in our browser. If you are unable to access the
+application you may have something already running on port 80, which is the default port for the ingress.
+
+You'll need to identify what is using this port and shut it down. Some students have even had applications from other courses or personal projects still running.
+For Windows Pro users, both SQL Server Reporting Services (MSSQLSERVER) and the World Wide Web Publishing Service / IIS Server have been the most common services causing a conflict.
+
+To determine what might be using this port, run:
+
+macOS / Linux
+
+sudo lsof -i tcp:80
+
+Windows:
+
+netstat -aon | findstr :80
+
+Minikube users on Windows and macOS should make sure that they aren't using the docker driver which is not compatible with an ingress as noted here:
+
+https://www.udemy.com/course/microservices-with-node-js-and-react/learn/lecture/23145358#questions
+
+## 94-034 Hosts File Tweak:
+We just wrote our first ingress config file. But what is `hosts: posts.com` there?
+When we make use of k8s, we can absolutely just hose one single app at one single domain. But with k8s, we can host a ton of infrastructure. We're not
+necessarily limited to just hosting one singular app. 
+**Important:** So we could host many different apps at many different domains inside of a single k8s cluster. Look at 94-034-1.
+We could have some app tied to my-app.com, another totally different app at post-tracker.com . 
+The infrastructure for all these different applications at these different domains can be hosted inside of one single k8s cluster. Ingress nginx is set up, assuming that
+you might be hosting many different apps at different domains. So that's what that `host` property is all about. We're saying that the config there we're 
+about to write, in the section where we have:
+- host: posts.com
+  http:
+     paths:
+        - path: /posts
+        pathType: Prefix
+        backend:
+           service:
+           name: posts-clusterip-srv
+           port:
+              number: 4000
+is all tied to an app hosted at the value of host property which in this case is posts.com .
+Now there's kind of a good side and a bad side to this. The bad side is that in development environment, we're used to accessing all of our different running
+servers at localhost. So how does this kind of routing rule or this idea of having some specific domain like posts.com really stack up with
+ingress nginx?
+In dev env, what we have to do is trick our local machine into thinking that posts.com is equivalent to localhost.
+In other words whenever we try to connect to posts.com , we're gonna trick our computer to connecting to our local machine rather than the real posts.com that I'm sure it 
+exists out there somewhere online. 
+
+To trick our local machine into connecting to localhost whenever we go to posts.com , we're gonna make a configuration change on our computer to our hosts file.
+Look at 94-034-2.
+Your hosts file is where we can set up a series of additional little routing rules and we can say anytime they tried to go to posts.com , instead just 
+connect to our local machine. Again, this is going to somehow trick or make ingress nginx think that we're coming to it from posts.com and it's going to 
+apply all the routing rules that are shown in the config file of ingress nginx.
+
+Add this to the bery bottom of hosts file:
+`127.0.0.1 posts.com`
+If you're on minikube, instead write this:
+`<result of minikube ip command> posts.com`
+
+So now whenever we try to connect to posts.com , your OS is gonna say: Oh, rather than going to the real posts.com somewhere out on the internet, I'm going to
+instead connect to the local machine(127.0.0.1) or me, which is at 127.0.0.1 .
+If you see permission warning, in windows, open your editor program in administrator mode, if you're on macos just put in your password in the editor.
+
+Now inside of the browser or postman or ... , if we go to posts.com , we're gonna be actually make a req to 127.0.0.1 , that req is gonna go into ingress-srv ,
+then ingress-nginx is gonna think that we're trying to visit posts.com and so it's gonna apply the routing rules that we wrote for posts.com in the related
+config file.
+
+Now test this by going to posts.com/post in the browser which should behind the scenes, make a req to our posts cluster IP service which actually makes a req
+to our posts pod and we know if we make a GET req to /post that should send us back all the different posts we have created inside the service.
+
+So we're able to access some pod and most importantly, we didn't have to reach out directly to that pod. In other words, we didn't have to type in some url
+that says: go to my posts pod, instead, we put in just a very normal URL and behind the scenes, ingress-nginx is gonna take that req and route if off to the 
+appropriate service and that service(cluster IP service) in turn is gonna route it off to the appropriate pod.  
+
+Now we need to go to all of our different services and we need to add in some routing rules to that ingress-nginx config file and we also need to 
+create a deployment for our react app. Look at 94-034-3
+
+
+## 95-035 Important Note to Add Environment Variable:
+Please don't skip this!  You must make a small change to get a step shown in the next video to work correctly!
+
+The next video is going to show the deployment of the React app to our Kubernetes cluster.  The React app will be running in a Docker container.
+
+Unfortunately, create-react-app currently has a bug that prevents it from running correctly in a docker container.  Create-react-app does 
+an open issue tracking this: https://github.com/facebook/create-react-app/issues/8688
+
+To solve this, we have to make a small update to the Dockerfile in the client folder.  Find the Dockerfile in the client folder and make the following change:
+
+FROM node:alpine
+
+### Add the following line
+ENV CI=true
+
+WORKDIR /app
+COPY package.json ./
+RUN npm install
+COPY ./ ./
+
+CMD ["npm", "start"]
+Then save the file.  That's it!  Continue on to the next video.
+
+## 96-036 Deploying the React App:
+Whatever value for host key you have in the ingress-srv.yaml , you need to add it to hosts file to have sth like: 127.0.0.1 <value of host key>, if you want
+the machine to go to the localhost instead of the real domain.
+
+Modifying the hosts file is really just appropriate for a development env. Once we start to deploy that thing out online, we don't need to make any 
+actual changes to any host file on remote server or anything like that, because we will be connecting to the real posts.com which would hopefully connect us 
+over to our k8s cluster.
+
+Now let's set up the react app dev server pod. We need to make sure that inside of that react dev server, our actual react code is now gonna make reqs to posts.com .
+Because that's where in theory our k8s cluster is located. If we make a req to posts.com , our react app is gonna attempt to connect to that ingress nginx pod.
+Look at 96-036-1 .
+So in the react app code, anytime we made a req to localhost, we will change it to be posts.com instead.
+
+Note: In react app, when we say: await axios.post(`http://posts.com/posts/${postId}/comments`, {content});
+that req is not gonna go the ACTUAL posts.com on the internet, it's going to be to our local machine because of the config in hosts file.
+
+Now all the code inside of our react app is gonna try to go to posts.com . Again, when we're running that react app on our local machine,
+whenever we make that req, our local operating system is gonna take that posts.com and redirect the req to our local machine instead, where it will be handled by
+k8s.
+
+**Note:** Now that our react app is using the right url for sending req, we need to create an image of it. Then we will write a config file to make a delpoyment, so we can
+actually host that inside of our k8s cluster. We need to not only make a deployment, we need to make sure we make a cluster IP service as well, so that
+the ingress nginx controller can eventually direct traffic to that pod so we can serve out the html, css and js out of it. 
+So go to that directory where the react app exists and build an image out of the react application:
+```shell
+docker build -t <docker id>/client . # client is the name of the image that we're gonna build
+docker push <name of the image>
+# Now write a config file to create a k8s deployment to host that image that we just put together and also create a cluster IP service to go along with it. 
+```
+We named the config file for the deployment object of our react app, client-depl.yaml .
+
+Note: A create react application is hosted on port 3000.
+
+After creating that config file for deployment of react application, apply that config file tok8s cluster by navigating to the folder where that config file exists:
+```shell
+k apply -f <name of the config file with extension>
+```
+
+Now that our react app is also running in the cluster, we need to set up all those routing rules. We need to make sure that anytime we get an incoming req to that ingress controller,
+it understands where to route the req off to? (Look at 96-036-2)
+
+## 97-037 Unique Route Paths:
+
+
+
+
+
 
