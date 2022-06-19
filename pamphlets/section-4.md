@@ -1245,8 +1245,62 @@ Now that our react app is also running in the cluster, we need to set up all tho
 it understands where to route the req off to? (Look at 96-036-2)
 
 ## 97-037 Unique Route Paths:
+We're gonna set up a routing rules for all the other microservices inside of our cluster.
 
+Right now we only have a route mapping for /posts in ingress-srv.yaml which is:
+- path: /posts
+  backend: 
+    serviceName: posts-clusterip-srv
+    servicePort: 4000
+which means in theory, we can only attempt to fetch or retrieve posts, because that is the only thing we're doing with our posts cluster ip service.
+So we need to add in some additional paths to this thing to make sure we map up all the different incoming reqs that might come in.
 
+All the different routes that we need to service, is shown in 97-037-1. In that diagram, we have some reqs coming in from our react app(red boxes). Those are all 
+the different reqs we expect to receive with their HTTP methods.
+
+Note: A GET to / , is attempting to LOAD UP THE REACT APPLICATION, so we need to make sure that gets sent to the react pod.
+
+Bad news is we have two routes right now of /posts! If a req comes in with a method of POST, then that should go to the posts service, otherwise if it is
+a GET, it should go to query service. The bad news is that our ingress nginx module can NOT do routing based upon the method of the req!
+So the only thing we can really route on effectively, is a route of req(path) and not it's method. So we need to route based on 97-037-2.
+Now the reason this is bad, is that if we have a req coming in to /posts , we have 2 pods that can receive a req with path of /posts.
+We can no longer differentiate on the METHOD of the incoming req. So now we don't have enough info with these reqs to figure out whether or not one should
+go to the posts pod or query.
+
+To fix this, we need to make sure that we have some unique path that should go to posts and a unique path for one that should go to query.
+In other words, we just need to change the name of one of these paths that is repeated.
+Instead of /posts for posts pod, change it to /posts/create . Now we need to change 2 different images just to solve this issue. React image and the posts service image.
+Because we're gonna have to edit those two code bases and then rebuild the images and push them back up to docker hub.
+
+So in react app, make the url for sending a req to create a post, to /posts/creates . Why? Because we want to differentiate between a req
+that is supposed to go to the posts pod vs the query pod.
+Then in posts service, change app.posts('/posts') to app.posts('/posts/create') .
+
+Now inside react root directory, run:
+```shell
+docker build -t <docker id>/client .
+docker push <docker id>/client
+kubectl rollout restart deployment <name of the deployment>
+```
+
+Question: Do we have to rebuild the image manually and push it up to docker hub every single time we make a change to our codebase?
+Yeah, it is awkwared, we're gonna fix it quickly. We're gonna look at a tool that's gonna automate this change process for us.
+**Note:** For now: Anytime we want to make a change to our code, we have to rebuild the image, push it and then update the related deployment manually and then
+restart the deployment.
+With that, we've got updated the images and restarted the related deployments based on new source code.
+Now we need to write the routing configuration that we need.
+
+Now we've got unique routes that we're going to access in each of our different pods.
+
+## 98-038 Final Route Config:
+
+## 99-039 Introducing Skaffold:
+
+## 100-040 Skaffold Setup:
+
+## 101-041 First Time Skaffold Startup:
+
+## 102-042 A Few Notes on Skaffold:
 
 
 
