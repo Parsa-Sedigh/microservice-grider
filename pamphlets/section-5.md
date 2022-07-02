@@ -83,6 +83,42 @@ About #5: We're gonna have unending focus on data consistency and making sure th
 some code or some idea of how to deal with that.
 
 ## 104-002 App Overview:
+We're gonna build sth similar in nature to stubhub.com . 
+
+There, in main page, we see a lot of different events and ... and we can select some time or data to go to that event, select it, then we prompted to select an 
+actual ticket and those are the tickets that are for sale by other users. Select a ticket and then go to checkout(if you aren't logged-in, you need to login or signup first).
+
+Imagine I'm trying to purchase a ticket for a very popular event. So maybe the instant that tickets get listed for sale, people just dogpile on it!
+In other words, tons of people come to this website simultaneously and try to buy the exact same ticket. You probably want to make sure that nobody clicks on "go to checkout" and
+enter their payment information for a ticket that has already been sold to some other user.  So we probably want to have some ability to say: "Hey, sorry, but someone else is 
+in the process of purchasing these tickets" or sth similar. 
+
+Let's look at a brief summary of some of the business rules around the app that we're going to put together.
+
+So we're gonna build a ticketing app. We're not gonna have features like different dates or defined events or ... . We're gonna focus on the ticketing aspect of it. So we would have:
+
+### overview of business logic inside the app:
+
+- users can list(create) a ticket for an event(concert, sports) for sale
+- other users can purchase this ticket(after it's been listed)
+- any user who signs up to our application, can list tickets and purchase tickets(so no user is more special than another. Anyone can sell a ticket, anyone can
+  purchase that ticket) and in our app, we're even gonna say you could purchase your own tickets if you wanted to for some crazy reason.
+- when a user attempts to purchase a ticket(when user clicks on some purchase button), the ticket is 'locked' for 15 minutes. The user has 15 minutes to entier their payment info
+- while locked, no other user can purchase the ticket. After 15 minutes, the ticket should 'unlock'. We're gonna take clicking on sth like "go to checkout" button, as a user
+  intending to buy that ticket and at that point of time, we're gonna lock the ticket and no other user should be able to purchase this ticket from out from underneath this
+  person. When we click on "go to checkout", we've not actually entered any payment information or anything like that, so a user still has to pay or enter his payment
+  info within 15 minutes, it is just expressing intent to purchase the ticket, that's gonna lock it for 15minutes. You can make it 30 seconds to test it.
+- ticket prices can be edited if they are not locked, it's not even gonna be displayed to other users. So the instant someone locks the ticket, other users who are
+  searching for tickets, they just won't even see this one that has been locked.(This gonna be challenging, because it's gonna clearly demonstrate some big challenges around
+  async communication in microservices that can easily tell you why? Imagine the scenario in which some user out there lists a ticket for one hundred dollars and in some amount
+  of time later, another user clicks on purchase ticket. So like in one instant in time, a user attempts to purchase the ticket and the things should be locked and let's imagine 
+  that at the SAME EXACT POINT IN TIME, the user who owns the ticket and who listed it, changes the price to 1000$. So at the same time, one person tries to lock it, at the same time,
+  someone else tries to change the price. We're gonna run into a ton of scenarios like that. We have to figure out how to handle these events in some precise, testable fashion.)
+
+An order is when a user has locked the ticket they have created in order. Also, when a user has successfully purchased a ticket, that is in order as well.
 
 ## 105-003 Resource Types:
 
+## 106-004 Service Types:
+
+## 107-005 Events and Architecture Design:
