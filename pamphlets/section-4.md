@@ -1053,7 +1053,7 @@ backend:
   service:
      name: posts-clusterip-srv
      port:
-     number: 4000
+       number: 4000
   We will include a separate v1 Ingress manifest attached to each appropriate lecture throughout the course so that students can refer to the changes.
 
 ## 92-032 Writing Ingress Config Files:
@@ -1125,7 +1125,7 @@ https://www.udemy.com/course/microservices-with-node-js-and-react/learn/lecture/
 
 ## 94-034 Hosts File Tweak:
 We just wrote our first ingress config file. But what is `hosts: posts.com` there?
-When we make use of k8s, we can absolutely just hose one single app at one single domain. But with k8s, we can host a ton of infrastructure. We're not
+When we make use of k8s, we can absolutely just host one single app at one single domain. But with k8s, we can host a ton of infrastructure. We're not
 necessarily limited to just hosting one singular app. 
 **Important:** So we could host many different apps at many different domains inside of a single k8s cluster. Look at 94-034-1.
 We could have some app tied to my-app.com, another totally different app at post-tracker.com . 
@@ -1293,15 +1293,211 @@ Now we need to write the routing configuration that we need.
 Now we've got unique routes that we're going to access in each of our different pods.
 
 ## 98-038 Final Route Config:
+Instead of /posts as path of posts-clusterip-srv in ingress configuration, write: /posts/create .
+Then write the routing configuration for other services by adding another `-path` for the paths.
+
+Req comes into /posts , we want to send it to the query pod.
+
+**Note:** To find out what port a service in our k8s cluster is running on, we can either print out all of our services at the terminal or alternatively,
+we could just open up the deployment file of that service to see the targetPort of it. For example the port for query service is 4002.
+
+Next we have a route of `/posts/:id/comments`. Now we're writing out some routing configuration that's going to be interpreted by nginx and nginx
+does not support the same kind of like wildcard thing using a colon(:id). Instead, we write out paths for wildcards by using a regular expression.
+So the previous path would be: /posts/?(.*)/comments .
+In order to use regular expressions in a path inside a k8s object config file, we have to add in one additional line of config at the top of that file inside the 
+`annotations` section and that line is: `nginx.ingress.kubernetes.io/user-regex`: `'true'`
+This line is gonna allow us to use regular expressions in all of our path expressions.
+
+For our react application, just the `/` as path would work OK, but for a typical react app where you're using react-router to handle routing inside of your app in a 
+single page app sort of approach, you would usually use a regexp like: /?(.*) . This is gonna make sure it matches any path and always try to show the react application.
+Now if you're going to write out a path like this, it always has to be at the very end. 
+The `paths` section is ordered from greatest importance down to the least importance.
+
+So if we put /?(.*) at the end, it will match only after trying to match all the previous paths. If we put this at the top, it will always match that path and nothing else
+no mather the path! which is not what we want.
+
+After witing the routing configuration, make sure you're at k8s directory and we're gonna make sure that we re-apply the ingress-srv file. So run:
+```shell
+kubectl apply -f ingress-srv.yaml
+```
+
+Before testing the app, run a `k get pods` to verify that everything is up and running.
+Then in browser, go to posts.com to see the react app.
+
+Currently, anytime we want to make a change to our codebase, we have to:
+1) make the change
+2) rebuild the image
+3) we have to push the image up to docker hub
+4) run `k rollout restart deployment [name of deployment]`
+
+and that's way too much for doing any type of typical development approach. So we need a better way of making changes to our cluster inside of a development environment.
+There's a tool to automate that.
 
 ## 99-039 Introducing Skaffold:
+Currently, our app is running inside of our cluster. But making changes to our code base right now is a real pain. Because anytime we want to change the image that is used
+by a deployment, we need to follow some steps:
+### updating the image used by a deployment - method #2:
+1) the deployment must be using the 'latest' tag in the pod `spec` section
+2) make an update to the code
+3) build the image
+4) push the image to dockker hub
+5) run the command: `k rollout restart deployment [depl_name]`
 
+Actually, this is how we're going to eventually deploy code in a production style environment, but in a development environment, this is clearly
+not a great approach.
+
+So when we're developing code actively inside of a k8s cluster, we're gonna instead use a tool called skaffold.
+Skaffold is a command line tool that we're going to use to automatically do a lot of different tasks in our k8s dev environment specifically.
+You CAN use skaffold in a production envionment, but for us we're really just gonna focus on using it in development.
+
+The number one thing that we're interested with skaffold, is that it makes it easy to update code in a running pod that's essentially just as quickly as we were
+not using k8s at all. The other great thing is that it makes it easy to create and delete all the different objects that are tied to some project, quickly and
+that's important if we start working between multiple k8s projects.
+
+When you're running a cluster on your local machine, there is just one cluster. So if you start to work between different projects, you're going to 
+want to be able to change between these different sets of objects quickly and you can do that using skaffold.
+
+Skaffold
+- automates many tasks in a k8s dev environment
+- makes it easy to update code in a running pod
+- makes it easy to create/delete all objects tied to a project at once
+
+Installing skaffold:
 ## 100-040 Skaffold Setup:
+To make sure skaffold is installed successfully, run: 
+```shell
+skaffold
+```
+Now that we've got skaffold installed, we're gonna configure it by writing out another config file. This config file is gonna tell skaffold how to manage all the
+different subprojects(like client, comments, event-bus and ...) inside of our cluster.
+In your root project directory(parent of client, comments, event-bus and ... directories), create skaffold.yaml .
+The config that we're gonna write inside this file is gonna look similar to a lot of the configuration that we've already written to apply to a k8s cluster.
+But everything we write inside of that skaffold.yaml , does not get applied to k8s. Instead, it is just consumed by skaffold directly and skaffold is a tool that
+runs outside of our cluster.
+
+In:
+`
+kubectl:
+    manifests:
+       - ./infra/k8s/*
+`
+we're telling skaffold that there is a collection of different config files intended for k8s which those config files are in ./infra/k8s/* . So by adding in that
+manifests line, we're telling skaffold that we wanted to watch all those different yaml files. Anytime that we make a change to one of those files,
+skaffold is gonna automatically re-apply that config file to our k8s cluster. In other words, it's gonna save us from the hassle of having to run:
+`kubectl apply -f <file>` over and over again anytime that we create a file or make a change to a config file.
+
+By listing out `manifests`, skaffold is also gonna make sure to create or apply all those yaml config files anytime that we see start skaffold up.
+It's also going to delete all the config or all the objects, associate with those config files, whenever we stop skaffold as well.
+So in total these lines:
+`
+kubectl:
+    manifests:
+       - ./infra/k8s/*
+`
+are doing 3 things:
+When we start up skaffold, apply those config files.
+When we make a change, apply those files.
+Whenever we stop skaffold, find all the objects related to those config files and delete them. Don't delete the files themselves, just delete the objects that are
+created by them inside of our k8s cluster.
+This is the part where this is fantastic for working between different projects, because whenever we start up skaffold, we're gonna apply all those k8s objects. Whenever
+we stop skaffold to go work on another project, all the objects related to those will be deleted and we'll end up with a relatively clean cluster.
+
+That's part 1 of the skaffold config file.
+
+Now onto step 2.
+We're gonna put in a build section and then local and ... .
+
+By default, whenever skaffold makes a change to one of our images or rebuilds an image, it's going to try to push it up to docker hub. That is not 
+actually required when we're using skaffold. So we're gonna disable that default behavior by saying: `push: false`.
+
+`artifacts` is gonna be an array and in this case, we're gonna write out one array entry.
+
+Now what is this configuration:
+```yaml
+  artifacts:
+    - image: parsa7899/client
+      context: client
+      docker:
+        dockerfile: Dockerfile
+      sync:
+        manual:
+          - src: 'src/**/*.js'
+            dest: .
+```
+The artifacts sections is telling skaffold about sth inside of our project that it needs to maintain. We're essentially saying that there is going to be 
+some pod that is running code out of the client directory(where we have: `context: client`) inside of our project.
+Whenever sth changes inside that specified directory which in this case is client directory, skaffold is gonna try to take those changes and somehow update our 
+pod. There are two ways in which skaffold is gonna try to update our pod.
+First off, if we make a change to a JS file inside the client directory as indicated by: `src: 'src/**/*.js'` , then skaffold is gonna try to take that
+changed file and just directly throw it into our pod. It's gonna literally take that file that we updated it and copy it directly into the pod itself.
+So our pod is going to always have the latest code inside of it. If we ever make a change to anything inside that client directory that is not matched up by:
+`src: 'src/**/*.js'` , then skaffold is gonna instead try to rebuild the entire image. So for example, imagine if we installed a new dependency into our 
+client project. Whenever we install a new dep that's going to update our package.json file, technically package-lock.json and technically node_modules as well. But basically
+it is making a change to our project that is NOT changing a JS file. So because we made a change to a file that is not mathcing up to the `src` inside the manual and sync section,
+skaffold is gonna decide to completely rebuild our image and update the deployment tied to it. So it's gonna rebuild the image that we specifed in 
+`image` key, it's gonna use the `context` key that we specified as our directory which in this case that directory is client, as the SOURCE OF THE IMAGE and once the
+image is built, it's gonna throw it as the update into our cluster. 
+
+So those are the two things that the `image` section inside artifacts of config file for skaffold is doing and those rules are:
+1) update the files inside `src`, in place.
+2) or if it's a different files that is not matched by that `src` key, rebuild the entire image.
+
+Now we need to dupliacte that `image` entry of `artifacts` for all of our other little subprojects like comments, event-bus and ... .
+
+Now let's see how skaffold improves our development workflow... .
 
 ## 101-041 First Time Skaffold Startup:
+Now we need to start skaffold up. To start up skaffold, inside where your skaffold.yaml file is(which typically is root of your project directory), run:
+```shell
+skaffold dev
+```
+
+The first time you try to run skaffold, it's gonna probably try to just rebuild all of your images, even though we've already built them once already. So it's gonna
+take some time for initial setup process.
 
 ## 102-042 A Few Notes on Skaffold:
+After building the images because of the first time of running skafold, you might get some error messages that say: `manifest unknown`.
+You can solve it by ending skaffold by hitting ctrl+c and then running `skaffold dev` once again.
+When you rebooted skaffold, all those error messages went away.
 
+After starting up skaffold the second time, we start to see some output from each of the different pods that are created.
 
+The first nice thing about skaffold is that it's gonna take all the logs coming out of those pods and print them easily, with some color inside of our terminal.
 
+Currently, all of our data is stored in memory, so every single time that we restart those services, we essentially are dumping all of our data.
 
+Now in theory, we should be able to go to some subproject and save that file and then it should detect at one file has changed, it took that file and threw it
+into our client pod.
+The client pod then automatically saw that that file changed and it rebuild our react app. So we should see the changes kinda immediately.
+
+**Important note:** Our create-react-app application is set up through all the create-react-app magic, anytime it sees a file change, it's going to rebuild
+the react application and refresh the browser for you. That is sth that is built into create-react-app. In addition, all those different node services we put
+together, such as comments, are all being executed with nodemon and nodemon is a tool to restart your project any time it sees a file change to a file inside
+of a given directory.
+So right now all of our different pods(the containers inside them), are using tools that are going to restart the given primary process whenever it sees a change to a 
+file inside of that pod, there's kind of like 2 levels of restarting!
+The first one is if we make a change to one of the specified files inside subprojects that we specified for skaffold, skaffold is going to see that, kick in, take the updated file
+and throw it into a pod and then inside the pod or more specifically inside the container, we're running very specifgic processes like create-react-app or nodemon, that are
+seeing changes to the files inside of that container and then restarting the primary proccess of that container.
+
+So if you have some node app or kind of a frontend app that does not use sth like nodemon or sth to automatiaclly restart your app dev server(for example in node apps,
+if you run: `node index.js` instead of using nodemon like: `nodemon index.js`), then even if skaffold throw some updated file into your pod, it's not going to do you any good!!!!
+Inside the pod you STILL have to have sth that's going to see the updated file arrive in the pod and then restart the primary process and we usually do that in node apps
+with sth like nodemon, or in reaact, create-react-app and ... . So although this refresh stuff of skaffold is handy, you STILL HAVE TO make sure you take care of 
+your part of the deal!
+
+Now make a change to source code of some subproject and see the changes!
+
+Using file change detection inside of docker containers traditionally has been finicky. There are some file watchers like nodemon or create-react-app where they will not 
+always detect changes to files inside of a docker container. So there will be scnearios where you start to change files and you don't see any output from skaffold, yeah, you might see
+that skaffold says: Oh, I'm going to sync a file, but then you might now have anything coming out of the pod that says: Oh, I compiled successfully or I restarted the server
+or ... . There are some ways to solve this.
+
+So if you feel like you're making changes but they're not being reflected, it's probably tied to the fact that we sometimes have challenges detecting file changes inside of
+containers.
+
+Now anytime we want to go to work on another project, we're just going to stop skaffold by hitting ctrl+c on skaffold process.
+As soon as you do that, skaffold is gonna take a look at all those different config files that we pointed it to, it's gonna delete all the objects associated with them.
+
+So after ctrl+c on skaffold, if you run: `k get pods`, we're gonna have no pods found and also if you run: `k get deployments` there isn't any and for `k get services`,
+we only see the default kubernetes service.
