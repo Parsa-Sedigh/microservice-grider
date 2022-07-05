@@ -101,24 +101,77 @@ So we're gonna build a ticketing app. We're not gonna have features like differe
 
 - users can list(create) a ticket for an event(concert, sports) for sale
 - other users can purchase this ticket(after it's been listed)
-- any user who signs up to our application, can list tickets and purchase tickets(so no user is more special than another. Anyone can sell a ticket, anyone can
-  purchase that ticket) and in our app, we're even gonna say you could purchase your own tickets if you wanted to for some crazy reason.
+- any user who signs up to our application, can list tickets and purchase tickets
 - when a user attempts to purchase a ticket(when user clicks on some purchase button), the ticket is 'locked' for 15 minutes. The user has 15 minutes to entier their payment info
-- while locked, no other user can purchase the ticket. After 15 minutes, the ticket should 'unlock'. We're gonna take clicking on sth like "go to checkout" button, as a user
-  intending to buy that ticket and at that point of time, we're gonna lock the ticket and no other user should be able to purchase this ticket from out from underneath this
-  person. When we click on "go to checkout", we've not actually entered any payment information or anything like that, so a user still has to pay or enter his payment
-  info within 15 minutes, it is just expressing intent to purchase the ticket, that's gonna lock it for 15minutes. You can make it 30 seconds to test it.
-- ticket prices can be edited if they are not locked, it's not even gonna be displayed to other users. So the instant someone locks the ticket, other users who are
-  searching for tickets, they just won't even see this one that has been locked.(This gonna be challenging, because it's gonna clearly demonstrate some big challenges around
-  async communication in microservices that can easily tell you why? Imagine the scenario in which some user out there lists a ticket for one hundred dollars and in some amount
-  of time later, another user clicks on purchase ticket. So like in one instant in time, a user attempts to purchase the ticket and the things should be locked and let's imagine 
-  that at the SAME EXACT POINT IN TIME, the user who owns the ticket and who listed it, changes the price to 1000$. So at the same time, one person tries to lock it, at the same time,
-  someone else tries to change the price. We're gonna run into a ton of scenarios like that. We have to figure out how to handle these events in some precise, testable fashion.)
+- while locked, no other user can purchase the ticket. After 15 minutes, the ticket should 'unlock'. 
+- ticket prices can be edited if they are not locked
+
+About #2:
+so no user is more special than another. Anyone can sell a ticket, anyone can purchase that ticket) and in our app, we're even gonna say you could
+purchase your own tickets if you wanted to for some crazy reason.
+
+About #3:
+We're gonna take clicking on sth like "go to checkout" button, as a user
+intending to buy that ticket and at that point of time, we're gonna lock the ticket and no other user should be able to purchase this ticket from out from underneath this
+person. When we click on "go to checkout", we've not actually entered any payment information or anything like that, so a user still has to pay or enter his payment
+info within 15 minutes, it is just expressing intent to purchase the ticket, that's gonna lock it for 15minutes. You can make it 30 seconds to test it.
+
+About #4:
+it's not even gonna be displayed to other users. So the instant someone locks the ticket, other users who are
+searching for tickets, they just won't even see this one that has been locked.(This gonna be challenging, because it's gonna clearly demonstrate some big challenges around
+async communication in microservices that can easily tell you why? Imagine the scenario in which some user out there lists a ticket for one hundred dollars and in some amount
+of time later, another user clicks on purchase ticket. So like in one instant in time, a user attempts to purchase the ticket and the things should be locked and let's imagine
+that at the SAME EXACT POINT IN TIME, the user who owns the ticket and who listed it, changes the price to 1000$. So at the same time, one person tries to lock it, at the same time,
+someone else tries to change the price. We're gonna run into a ton of scenarios like that. We have to figure out how to handle these events in some precise, testable fashion.)
 
 An order is when a user has locked the ticket they have created in order. Also, when a user has successfully purchased a ticket, that is in order as well.
 
 ## 105-003 Resource Types:
+We're gonna design the app. We're gonna first begin by discussing the different pieces of data that we're gonna have to store, in order to implement this thing.
+
+In total, we're gonna have 4 different types of resources:
+Some table or collection, some storage of users. We're gonna also have: tickets, orders and charges.
+For every ticket, we're gonna have a userId reference, which is gonna be a reference to the user who is trying to sell the tickets and a reference to some
+order and that's gonna be the orderId field and that orderId reference is gonna be the kind of purchase attempt to actually get at this ticket.
+
+An order represents the ATTEMPT to purchase a ticket. So the instant that a user clicks on that "purchase button", we're gonna create that order object. The order object
+represents the intent to purchase the ticket. That expiresAt field represents the 15 minutes. As soon as the person actually enters in their credit card or what have you,
+we will update the order status to Completed or AwaitingPayment.
+
+Charge is gonna represent our ability to actually charge some person's credit card and get some money out of them. On the charge object, we'll have a reference
+to the order that users trying to pay for as orderId.
+We also have 2 mainainance fields or kind of administrative fields which are stripeId and stripeRefundId. stripeId is gonna be a reference to some object over in the 
+stripe.js or the stripe world, that is gonna be us trying to actually bill someone's credit card.
+We're also gonna have the ability to refund tickets as well. So we're gonna have sth called stripeRefundId too.
 
 ## 106-004 Service Types:
+We're gonna look at different services that we're gonna design to manage each of those resources. 
+
+In total, we're gonna end up with 5 different services:
+- auth: everything related to user signup/signin/signout
+- tickets: ticket creation/editing. Knows whether a ticket can be updated. It's gonna to know everyting about a given ticket.
+- orders: order creation/editing . Very similar to tickets service.
+- expiration: watches for orders to be created, cancels them after 15 minutes. It's gonna watch for anytime an order gets created. Anytime an order is created,
+  it's going to attempt to cancel that order after 15 minutes has elapsed if a user has not already entered in some payment info, 
+- payments: handles credit card payments. Cancels orders if payment fails, completes if payment succeeds. If a user enters in some credit card info and 
+  we successfully charge their card, we're gonna mark the accompanying order that is tied to that payment, as Succeeding. Otherwise, if for some reason, the 
+  order is canceled or if the order times out, or ... , we're gonna make sure that we mark a order as failed and the accompanying payment as failed.
+
+We're essentially creating a separate service to manage each type of resource(except the expiration service). Look at 106.04.1 .
+Is this the best approach?
+Probably not. It really comes down to what kind of app you're trying to build, how many different types of resources you have inside of your app and the amount of 
+business logic or special handling that is attached to every different type of resource.
+
+Instead of creating a service for each type of resource, you might thinking about how you could create a service to handle each different **FEATURE** of your app?
+For example a single microservice to handle ticket and order creation. A separate one to handle incoming payments and handle all aspects of a payment. For example
+making sure that you mark a order as being InCompleted and handle that incoming payment. And you might have that expiration service tied into that tickets and 
+ordering things, because they're all kinda tightly coupled together.
+So it shouldn't be your default to say: "Oh, here's the type of resource, I'm gonna create a single service to manage it.", instead it comes down to your app.
+
+But in this course, we're gonna create one service per type of resource.
 
 ## 107-005 Events and Architecture Design:
+
+## 108-006 Note on Typescript:
+
+## 109-007 Auth Service Setup:
