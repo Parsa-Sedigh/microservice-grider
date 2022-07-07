@@ -171,7 +171,259 @@ So it shouldn't be your default to say: "Oh, here's the type of resource, I'm go
 But in this course, we're gonna create one service per type of resource.
 
 ## 107-005 Events and Architecture Design:
+Let's list the different events we're going to create:
+UserCreated, UserUpdated
+OrderCreated, OrderCanceled, OrderExpired(whenever a order goes over that 15 minutes limit)
+TicketCreated, TicketUpdated
+ChargeCreated
+
+Look at 107-005-1 . In this pic, we see the overall design of each service.
+
+We're using redis for expiration service for a very particular reason.
+
+Each of those different services are gonna be making use of a shared common library and we refer to this as common.
+
+For an event bus, rather than building our own, we're gonna be using NATS streaming server(definitely not the same as network address translation which is in networking
+world!!!)
 
 ## 108-006 Note on Typescript:
 
 ## 109-007 Auth Service Setup:
+Look at 109-007-1 . In total, our auth service is gonna have 4 different routes assigned to it.
+
+We use ts-node-dev which is a tool that we need to actually execute our project in a development env.
+
+To generate a tsconfig file, run:
+```shell
+tsc --init
+```
+
+Note: The port which you listen on in your app's source code doesn't really make a different. So for example in express, the port which you specify 
+in app.listen(<port>, () => {}); doesn't really make a difference once we start making use of k8s, because we're gonna start to create all those different 
+services(a k8s service that is), that's gonna govern access to that express application like auth app that we're putting together.
+So let's use 3000 as port of auth app(doesn't really make a difference).
+
+We're going to EVENTUALLY run our express apps inside of k8s, but FOR NOW, let's run the express app like auth, with `npm start`.
+
+## 110-008 Auth K8s Setup:
+Anytime that we start to set up k8s, we need a couple of different things. First we need to make sure that we can build an image out of our service like
+auth service. 
+
+In order to build an image, remember, we have to write out a docker file. So create a Dockerfile inside auth directory.
+
+We don't want to load up the node_modules folder into our container as it's being built. So create .dockerignore and add node_modules to it.
+
+Now build the image of auth service. First stop the server of auth service(if it's running).
+So run: `docker build -t <your docker id>/auth .` inside the directory where the related Dockerfile exists.
+
+Now we want to write more config to get that built image loaded up into a k8s cluster.
+To get that container running inside a k8s cluster, we're gonna create a deployment. 
+
+**Note:** A deployment is gonna create a set of pods for us automatically and we can make sure that those pods are running our auth service.
+
+To write a k8s config file, create a new folder called infra(if it doesn't exist yet), then there, create a new folder called k8s and there, create a new file
+called auth-depl.yaml .
+
+Inside the `spec` section of deployment config file for a service, we first designate the number of pods that we want to run for the related service. So specify
+`replicas` for that. For example replica: 1 means we just want to run 1 copy of that image.
+
+This:
+```yaml
+  selector:
+    matchLabels:
+      app: auth
+```
+is the step 1, in a little 2 step process.
+
+The purpose of `selector`, is going to be to tell the deployment, how to find all the pods that it's going to create. 
+
+**Note:** After setting up that selector, we set up the `template` which shows how to create each individual pod that that deployment is going to create.
+
+The thing we write in `mathLabels` section of `selector`(which in case of auth service, that thing is: `app: auth`), is kinda matching up with the `labels` section that
+we write for `metadata` of `template`.
+
+The `spec` section in metadata, is going to tell the pod how to behave. There, we're gonna first designate all the containers that are going to be running inside that pod by
+using the containers section and it can have multiple entries, so use a dash to indicate an array entry.
+The `name` that you use for each container in that containers section is only important for logging purposes(so: `-name: auth` is only for logging purposes). 
+The value for `image` is the name of the image that you just built for the related service.
+
+Anytime we create a deployment, we usually are going to want to end up creating a service to go along with it. This is a k8s service, sth to give us access or 
+allow us to get access to a pod. We COULD create a separate file inside of our k8s directory to house the service config file, but a lot of time, we're gonna 
+end up with a one to one ratio between our deployments and the services. So we can just define a service inside the same file as the deployment config, so that all the 
+stuff is put together in one single location.
+
+So just use three dashes to separate those two configs.
+
+**Note:** The `spec` section tells th service how to behave and there, the selector tell that service how to find the set of pods that that service is supposed to govern
+access to(the service is gonna govern the access to those pods). We want to find all the pods with th elabel of `app: auth`, so as selector, use `app: auth` .
+
+With `ports`, we list out all the different ports that we want to expose on that pod. For now we only have one port, so that `ports` section only has one entry.
+
+For auth service, we set 3000 as port and targetPort because our auth service source code, we had it listening on port 3000.
+
+Important: Notice that for `spec` section, we did not define a `type` for the service. Because we're relying upon the default. The default service whenever we create one,
+is a cluster ip service. A cluster ip service is going to allow communication to the service from anything else running only inside of our cluster.
+
+The goal of skaffold is to find all the different things that we want to throw into our cluster, build them up and then throw them in and also handle some live code reload for
+any changes that we make to our project as well.
+
+## 111-009 Adding Skaffold:
+Let's setup the skaffold config file. Skaffold config file is gonna watch our infra directory, anytime we make a change to a config file in that infra directory,
+it will automatically apply it to our cluster. It's also going to make sure that anytime we change any code inside of our auth directory, it will sync
+all the files inside there with the appropriate running container inside of our cluster.
+
+Now go to root project directory and create skaffold.yaml .
+
+Note: In skaffold.yaml, the `deploy` section is gonna list out all the different config files we want to load into our cluster.
+Remember to put a ./ at the start of entries to manifests, to say: from the current working directory(means ./) ... 
+
+When we have:
+```yaml
+  local:
+    push: false
+```
+it means that whenever we build an image, do not try to push it off to docker hub or anything like that, which is the default behavior.
+
+**Note:** The artifacts in skaffold.yaml is gonna be all the things that are going to be built. 
+So for now, in artifacts, as one entry, we're gonna list out the image that's going to be produced by that auth project.
+
+The `context` key is the folder that contains all the code for that image.
+
+The `sync` section is gonna tell skaffold, how to handle any files that change inside of that context.
+There, `dest: .` means where to sync this file to, inside of our running container. The dot means basically just take wherever the file was found from(which in the
+case of auth container, was found in src/**/*.ts) and throw it to the corresponding path(.) inside the container.
+
+Now run skaffold to see if we can get our project up and running inside of our cluster. If you're running skaffold from the previous project,
+do make sure that you close it before running it for this new project. Then go to the directory where the skaffold.yaml exist and run:
+```shell
+skaffold dev
+```
+
+If you get an error the first time you run skaffold, that's ok. Try killing the process with ctrl+c and re-run the command.
+
+After running skaffold, looks like we succesfully build the image, we then started the deploy with skaffold, then a auth deployment(auth-depl) was created and
+and then auth service(auth-srv) was created as well.
+Then we can see the logs from our newly running container.
+
+Sometimes we run into some big issues on detecting changes(actually skaffold detecting changes), made to projects that are running inside of a docker container. 
+So if you don't see the immediate change, that's fine. 
+Now let's see what you should do, if you do not see a change.
+
+## 112-010 Note on Code Reloading:
+Hi!
+
+If you did not see your server restart after changing the index.ts file, do the following:
+
+Open the package.json file in the auth directory
+
+Find the start script
+
+Update the start script to the following:
+
+ts-node-dev --poll src/index.ts
+
+## 113-011 Ingress v1 API Required Update:
+When running skaffold dev in the upcoming lecture, you may encounter a warning or error about the v1beta1 API version that is being used.
+
+The v1 Ingress API is now required as of Kubernetes v1.22 and the v1beta1 will no longer work.
+
+Only a few very minor changes are needed:
+
+https://kubernetes.io/docs/concepts/services-networking/ingress/
+
+Notably, a pathType needs to be added, and how we specify the backend service name and port has changed:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-service
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  rules:
+    - host: ticketing.dev
+      http:
+        paths:
+          - path: /api/users/?(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-srv
+                port:
+                  number: 3000
+```
+
+We will include a separate v1 Ingress manifest attached to each appropriate lecture throughout the course so that students can refer to the changes.
+
+## 114-012 Ingress-Nginx Setup:
+Before we worry about setting up any additional tooling around testing, we should make sure that we can do some manual testing using sth like postman.
+So let's set up a route handler to test it.
+
+We need to access our running server. Specifically, our auth pod. Remember that to access anything inside of our cluster, we have to set up one of two things.
+We really have two options! We can either set up one of those node port services or we can set up that ingress service.
+
+Remember that ingress is all about having some routing rules tied to nginx. So anytime a req comes into our cluster, it'll be handled by that ingress service and 
+they'll be routed off to the appropriate service within our cluster. So let's add some config fules to ingress nginx.
+
+Between the last app and this one, we did not delete ingress nginx or anything like that out of our cluster. When we stopped our skaffold tool from the 
+last app, we deleted all the deployments, services and pods that were listed inside of our last project. We did NOT delete anything specifically tied to ingress nginx
+beyond our set of config rules. So in other words, you should not have to reinstall ingress nginx right now, unless you for some reason, reset your cluster between the 
+last set application and this one, or manually deleted all the ingress nginx stuff or sth like that.
+
+So we should only have to write out a new config file for ingress nginx and that config file will be loaded into our existing copy of the ingress nginx controller that is 
+still running inside of our cluster.
+
+If you did restart your cluster, to get nginx reinstalled, all you have to do is to go Deployment page of ingress nginx and run the _mandatory command_ 
+and then run either _docker for mac_ (it's also the docker for windows option) or the minikube command.
+
+Now let's create a ingress config file. So create a file named ingress-srv.yaml and there, we write some config to tell the ingress nginx controller, how to
+handle incoming reqs.
+
+**Note**: In ingress config file, `nginx.ingress.kubernetes.io/use-regex: 'true'` is telling nginx that it should expect some of our different paths that we're gonna 
+list, are gonna have regular expressions inside them.
+
+**Note**: The host in specs of ingress config file, is gonna be a kind of pretend domain name. So we're gonna put in some made-up domain name that we're gonna be 
+able to connect to, only from our local machine. So whatever domain name that we're gonna enter right there, we're gonna make sure we also
+go over and edit our hosts file as well to include that domain name. So that domain name is gonna only work on our local machine.
+
+```yaml
+- path: /api/users/?(.*) # /api/users/<anything>
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-srv
+                port:
+                  number: 3000
+```
+means anytime someone makes a req to our cluster and the req has a path of /api/users/<anything>, then we're gonna send that req on to that `backend`. In this case,
+that backend is the service that has a name of auth-srv and on port 3000.
+
+Now we should see: `ingress-service was configured`.
+
+Now we need to update the hosts file on our local machine to make sure that anytime we make a req to ticketing.dev, it redirects that req to our local machine or 
+it stays on our local machine and not the internet!
+
+## 115-013 Hosts File and Security Warning:
+Open hosts file(in administartor mode) which is on /etc/hosts on mac. Look at 115-013-1 .
+
+After changing hosts file, to test this out, we should be able to navigate to ticketing.dev inside of our browser and when we go there, that's just gonna
+reach out to our ingress nginx server. We don't want to reach to the server directly, we want to go to the route handler we put together, so we 
+specifically want to go to a route of ticketing.dev/api/users/currentuser and that's how we can access that express route handler.
+
+Now when you come to that ticketing.dev/api/users/currentuser, you might see an error message that says: Your connection is not private. This is because of some
+of the default behavior inside of ingress nginx. You see by default, ingress nginx is a web server that's going to try to use an https connection. Unfortunately, 
+by default, it uses what is called a self signed certificate. Chrome does not trust servers that use self sign certificates. As a matter of fact, if you
+click on that red https in url and click on certificate, it's gonna say: kubernetes ingress controller fake certificate.
+Usually, we could get around this message by click on advanced and clicking on that link, but unfortunately, kind of a double unfortunate thing!!!,
+the ingress server uses some configuration options that are going to prevent you from trying to circumvent that warning screen.
+
+So right now it seems like we just cannot reach out to that express route handler at all.(This error only affect us in dev env and it's sth our users are never
+gonna see once we properly configure all this stuff).
+
+**Note:** To get that message to go away, we're going to type: `thisisunsafe` into that tab. You don't have to select any inputs or anything like that.
+You're just going to go over that tab, click anywhere inside of it and then type: `thisisunsafe`.
+
+
+

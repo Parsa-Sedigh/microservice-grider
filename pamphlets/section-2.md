@@ -32,7 +32,7 @@ When sending reqs to our services, in header of the req you need to specify: Con
 If we make any changes to our code inside of our project, that's gonna restart our server and because we're storing all of our posts in memory,
 all of our posts will be automatically dumped!
 
-Note: You don't need to install body-parser anymore, it's built-in but we do need to use: app.use(express.json()); for parsing req's json body.
+**Note: You don't need to install body-parser anymore, it's built-in but we do need to use: app.use(express.json()); for parsing req's json body.**
 
 15-005 Implementing a Comments Service:
 First find the particular goals of a service you're gonna implement.
