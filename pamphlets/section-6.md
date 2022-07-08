@@ -81,6 +81,62 @@ that you will not have to spend anything in this course.
 Click on "new project" and name it "ticketing-dev".
 
 ## 120-005 Kubernetes Cluster Creation:
+Create a new k8s cluster inside the newly created google cloud project. Go to `kubernetes engine`>`clusters`. Change the name of cluster to ticketing-dev.
+Location type setting should be zonal and for zone, make sure that the zone that is elected is somewhere near you.
 
+Master version is the version of k8s that we're gonna use. The versions that are listed, are usually pretty laggy. In other words, when a new version of 
+k8s comes out, you will not see it appear in that list for quite a while. We want to make sure that we have at least a version at the 1.15... series.
+You can select the latest version.
+
+Then on left hand side, go to node pools. Then go to size and by default we get 3 nodes.
+
+Remember each of those different nodes is essentially an env where our pods, our deployments, our services are going to be executed.
+
+We also need to configure exactly what each of those nodes are? So on left side, select nodes. In machine configuration, by default they're selecting a fairly 
+standard virtual machine to run all your different pods, this is a bit more powerful than we need and you actually end up paying for it as well!!!
+
+So we can select `g1-small`.
+
+Now click on create at bottom left hand side. That's gonna create a new cluster of 3 separate nodes.
+
+## 121-006 Kubectl Contexts:
+How do we somehow connect to the cluster that we just created in google cloud?
+To access different clusters, we're always gonna end up using the same kubectl command. Behind the scenes, there are some configuration options that are
+being applied to kubectl. When we change those config options, is gonna change which cluster we're connecting to. 
+
+Look at 121-006-1.
+
+Behind the scenes kubectl uses sth called context. You can think of it as some different connection settings. They list out some authorization credentials, 
+some users, some ip addresses, a lot of different info to tell kubectl how to connect that to different clusters that exist in the world.
+
+Right now, we're connecting to our local cluster through a context that was created when we first installed docker for windows or mac on our machine.
+As a matter of fact, on docker icon>kubernetes , you can see sth that says context and our current context is docker-desktop.
+So that context has some connection settings inside of it to tell us how to connect to our local cluster. We need to add in a second context, a 
+new one that's gonna tell kubectl how to connect to the cluster that we just created in google cloud.
+
+There's two ways we can do this. We can either use the google cloud dashboard and go to some menus to find some little config that we would copy paste into a 
+file on our local machine. THat would be one way to add the context.
+
+Another way which is easier, is to instead install a tool called google cloud sdk which is a command line tool that we can use to interface with google cloud automatically.
+Google cloud sdk can create different contexts for us automatically and update kubectl on our local machine and teach it how to connect 
+to the clusters that we're creating in google cloud.
+
+So install google cloud sdk to automatically manage these context things for us.
+Just remember you do not have to initialize the SDK just yet. We're gonna do that in the next vid(do not run gcloud init command yet).
+
+
+## 122-007 Initializing the GCloud SDK:
+----------------------------------------TODO----------------------------------------
+Need a credit card to sign up to gcloud and continue this...
+
+## 123-008 Installing the GCloud Context:
+
+## 124-009 Updating the Skaffold Config:
+
+## 125-010 More Skaffold Updates:
+
+## 126-011 Creating a Load Balancer:
+
+## 127-012 Final Config and Test:
 
 
