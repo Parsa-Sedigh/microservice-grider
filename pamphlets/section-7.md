@@ -231,8 +231,69 @@ serializeErrors method and the same status code from the related error.
 By adding the error status code inside the custom error classes, now our error handling middleware doesn't need to know about the precise statusCode to use for
 any kind of error, instead, it just knows to take a look at the error's statusCode property.
 
-
 ## 143-016 Verifying Our Custom Errors:
+We want some check to make sure that serializeErrors method is always gonna return that array of objects that has `message` and optionally a property named `field` in it.
+Look at 143-016-1 and 143-016-2. We want sth in TS to make sure that those custom error classes have the correct implementation of serializeErrors() .
+
+How do we do this?
+There are 2 possible approaches.
+
+Option #1:
+![alt text](../img/section-7/143-016-3.png "Title")
+
+We could create a new file inside of our errors directory and we would call it sth like custom-error.ts and there we define an interface called CustomError.
+We're not going to use this approach though, but the code is written and there, we specify in order to be a CustomError, you have to have a statusCode of type number and 
+a serializeErrors function ... .
+
+We can make sure our class satisfies that interface by implementing that interface.
+
+So we say:
+```ts
+interface CustomError {
+    statusCode: number;
+    serializeErrors(): {
+        message: string;
+        field?: string;
+    }[];
+}
+
+// and then:
+export class RequestValidationError extends Error implements CustomError {
+    statusCode = 400;
+
+    constructor(public errors: ValidationError[]) {
+        super();
+
+        Object.setPrototypeOf(this, RequestValidationError.prototype);
+    }
+
+    serializeErrors() {
+        return this.errors.map(error => {
+            return {message: error.msg, field: error.param};
+        });
+    }
+}
+```
+
+Instead of using an interface, we're gonna use sth different.
+
+Option #2:
+
+![alt text](../img/section-7/143-016-4.png "Title")
+We're gonna create a new abstract class.
+
+The abstract class is gonna serve the exact same purpose as the interface. So it's gonna set out a number of properties that must be defined
+in order to be considered to be a CustomError.
+
+**Note:** When we translate interfaces to JS, all interfaces fall away. They don't exists in the world of JS, but abstract classes do! and that means that we can
+use abstract class with an `instanceof` check.
+
+In error handling middleware, currently, we're doing some instanceof checks for every single custom error. If we continue with the same pattern,
+we would have a ton of if statements for all of the different kinds of errors. But if all of those custom errors are going to be extending some custom 
+base class which is an abstract class and can produce some js after compilation, we can instead just have ONE SINGLE if statement. So we will only
+have to write out that if statement one time and that will capture all possible custom errors that ever get thrown inside our app.
+
+So instead of defining an interface and having our classes implement it, we use an abstract class and make our classes extend it.
 
 ## 144-017 Final Error Related Code:
 
