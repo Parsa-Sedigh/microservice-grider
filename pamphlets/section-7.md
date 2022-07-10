@@ -296,7 +296,89 @@ have to write out that if statement one time and that will capture all possible 
 So instead of defining an interface and having our classes implement it, we use an abstract class and make our classes extend it.
 
 ## 144-017 Final Error Related Code:
+`CustomError` abstract class is gonna extend the base Error class. We're then gonna make sure that RequestValidationError and DatabaseConnectionError extend
+CustomError instead of the builtin Error. So create a file called custom-error.ts .
+In that CustomError abstract class, we're gonna list out all the properties and methods that must be defined by any class that extends this class, very similar to 
+how an interface works. 
+
+**Remember:** We write out interfaces and we try to **satisfy** the interface. Same thing with abstract classes. Though the way in which we write out these properties
+that subclasses must implement is slightly different. In the abstract class for defining an abstract property, we use the abstract `keyword`.
+When we have sth like:
+```ts
+export abstract class MyClass {
+    abstract statusCode: number;
+}
+```
+This is saying that if you're going to extend this abstract class, you GOT TO HAVE a statusCode property and it must be of type number.
+
+By writing out the abstract keyword for a property of that abstract class, it means that a subclass MUST IMPLEMENT that property.
+
+Abstract class is very similar in nature to interface, but in this casae we're using an abstract class because that's going to allow us to carry actual class DEFINITION
+over to the JS world.
+
+In CustomError class the only reason that we're defining a constructor is to make sure we can put in that special little line of code that we use which is 
+required anytime that we're trying to extend a builtin class.
+
+Now if you're extending a class and you're not defining a constructor, there's no need to call super, but if you do define a constructor for the subclass,
+you have to call super() even though the base class doesn't receive any arguments from super(doesn't need anything when instantiating it).
+
+**Note:** In the abstract class, we're not defining a method, instead we're defining a method SIGNATURE, so we're saying that to extend that abstract class,
+you have to define that method in your subclass with the specified args and with the specified return type that we define in abstract class.
+
+Now rather than extending the builtin Error class in DatabaseConnectionError and RequestValidationError classes, we extend CustomError abstract class.
+
+So now if we ever forget to implement the specified abstract properties and methods that are defined in abstract class, we'll get an error. Or if we ever
+return sth other than the specified abstract method, from our subclass, we'll get an error.
+
+So abstract classes are all about making sure that we're implementing those custom classes correctly, by extending an abstract class.
+
+As we've discussed a billion times now, we didn't really want to rely upon the string we were used to pass to Error too much for trying to communicate any 
+information that eventually will get sent back to the user. HOWEVER, these error messages or whatever string we put inside Error() , will STILL be printed out
+inside of our server logs and so a kind of would be nice if sth goes wrong inside of app to still have some kind of actual string, sth that says:
+hey, for logging purposes, here's what just happened(in string format).
+So to make sure we still have that behavior, or to essentially have sth like: `throw new Error(<...>)` or `new Error('...')` , we need to make sure that whenever
+we create an instance of sth that is an error, we pass in the error message into that super() call in CustomError. When we call super() there, that's equivalent to
+calling new Error() more or less. So we need to receive a message when instantiating CustomError, so add in a message arg to constructor() of CustomError and pass it
+to Error class through calling `super(message);`
+
+This was only for logging purposes and it will never gonna be sent out to any of our users.
+
+Now rather than writing separate if statements in the error handler middleware and watching for every possible custom error class, we know that any custom error 
+that we build should be an instance of CustomError class. So we only need 1 single if statement there.
 
 ## 145-018 How to Define New Custom Errors:
+Let's add in a new error to handle the case in which a user goes to a route that does not exist. For this, create a new error class by extending the CustomError abstract class.
+
+As soon as you throw new <some error class>() in a route handler, express will capture the error and send it off to our error handler middleware.
 
 ## 146-019 Uh Oh... Async Error Handling:
+We can break all the error handling stuff we just did by adding the async keyword.
+
+If you're throwing an error inside an async function, so this will make the req hanging around:
+```ts
+app.all('*', async () => {
+    throw new NotFoundError();
+});
+```
+Whenever you mark a function as async, that function is no longer going to immediately return any value. Instead, it's going to return a promise that's going to
+resolve with some value in the future, even if we **immediately** throw new Error() inside that async function, like what we did above.
+
+If we have a synchronous route handler and we throw new Error() inside it, express will automatically capture that error and throw it off to any error handling middleware
+we have defined in our app. HOWEVER, if we have an async route handler(any route handler that has a async keyword, a callback or a promise), then we have to rely upon 
+the express's next function by saying: **next(err);** instead of **throw new Error('')**.
+
+We want to find a way to not have to worry about calling next() for async route handlers. Because calling next() is sth that's very particual to express and it really
+requires engineers to understand what `next()` function is doing behind the scenes. It's better to somehow find a way to stick with the `throw` keyword, but make it work
+with async as well.
+
+To do so, install a package that's gonna change the default behavior of how express handles route handlers(including async ones).
+This package is gonna make sure that express waits on sth like: 
+```ts
+app.all('*', async () => {
+    throw new NotFoundError();
+});
+```
+So if we have some async code inside of a route handler, express will start to watch for any errors that we `throw` at any point in time inside that function.
+Install `express-async-errors`.
+
+This package affects all of our route handlers, so `throw new Error()` inside async route handlers will work as expected.

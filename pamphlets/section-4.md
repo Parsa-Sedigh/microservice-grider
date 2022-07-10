@@ -569,7 +569,7 @@ We're only gonna use cluster IP and load balancer on daily basis.
 
 - Cluster IP: Cluster IP services are used anytime that we want to set up communication between different pods inside of our cluster. This type of service,
   sets up an easy-to-remember URL to access a pod. Only exposes pods in the cluster.
-- Node port: These are used any time we want to access a pod from outside of our cluster, but we usually only use a node port for development purporses.
+- Node port: These are used any time we want to access a pod from outside of our cluster, but we usually only use a node port for development purposes.
   So this service makes a pod accessible from _outside the cluster_.
 - Load balancer: These are the right way to access a pod from outside the cluster, so you can think of a node port and load balancer as being very similar, but
   the way that they actually work are very different.
