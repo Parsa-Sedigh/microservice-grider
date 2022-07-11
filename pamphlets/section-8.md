@@ -115,7 +115,7 @@ creating a document) and TS is not gonna complain or help us! Because TS is not 
 Issue #2:
 At some point in time after we created a new doc, we want to access some of the data within that created new doc, like logging the doc, the issue is
 we might end up seeing that that user doc has MORE properties than what we provided to the constructor when creating that doc. So behind the scenes,
-mongoose might decide to add in a couple of additional properties to that doc as well, like createdAt and ... .
+mongoose might decide to add in a couple of additional properties to that doc as well, like createdAt or updatedAt or ... .
 
 So the properties we pass into the constructor, don't necessarily match up with all the properties that are created on the user doc. 
 
@@ -176,8 +176,67 @@ We want to make creating a new user doc, somewhat similar to the normal way of n
 new user.
 
 ## 153-007 Adding Static Properties to a Model:
+Let's write a slightly better way of writing out buildUser function so that's not a separate standalone function. Instead, we're going to get this thing builtin or
+included with our User model.
+
+The end goal is be able to say: User.build({...}) . The nice thing about this appraoch is we no longer have to export a separate thing from that user.ts and 
+creating a new user is kind of a natural thing. Because we say: User.build() , so build a new user.
+
+To add in a new method to our user model, right above where we create our model from the schema, we say:
+`
+<schema>.statics.<name of the function which we'll call> = (attrs: <some type>) => {
+    return new User(attrs);
+};
+`
+
+This is how we get a custom function built into a model. We add it to that statics property on our schema.
+
+But this doesn't work! Because now if you say:
+```typescript
+User.build({
+    
+});
+```
+TS will throw: `Property 'build' does not exist on type 'Model<Document, {}>'`.
+
+So this is yet another point at which getting TS and mongoose to work together is just a bit awkward. TS doesn't understand what it means to assign a property
+to the `statics` object of a schema. We have to give more info to TS.
+
+To fix this, create an interface that describes the properties that a User model has. So we're gonna write an interface that's going to essentially tell TS that there's
+going to be a build function available on that User model and we're also gonna tell it what args are required to call it as well.
+Create the `UserModel` interface.
+
+Now because our interface is extending another one, the properties that are defined in the interface we're extending, are gonna available BY DEFAULT(this is the effect of 
+extend keyword) on our new interface, but we can also define same properties but with different types for our new interface.
+So when we have:
+```typescript
+interface UserModel extends mongoose.Model {
+
+}
+```
+So now UserModel has all of the properties and their types that are available on mongoose.Model interface.
+
+Now to tell TS about the existence of UserModel interface, add the USerModel as the SECOND type parameter of `mongoose.model()` so now we have: `mongoose.model<UserModel>()`.
+
+We have solved issue #1. We have not really solved anything related to issue #2 where we needed to somehow tell TS and mongoose that the set of properties
+that we pass into creating a new user, are different than the properties that END UP on a user doc.
+
+The UserModel interface represents what the entire collection of users look like(so it has mongoose.Model properties + the ones we define(in this case, `build` method))
 
 ## 154-008 Defining Extra Document Properties:
+Create another interface named `UserDoc` which represents what properties a single user DOCUMENT has.
+
+If we ended up adding in additional properties to the user document, or if mongoose automatically added those properties in(like createdAt and 
+updatedAt), that `UserDoc` interface is where we list them. **But** in our case, we're not telling mongoose to add in those properties for us right now.
+So don't add createdAt and updatedAt. We have not createdAt or updatedAt as properties of a user document, so don't add them. Even if we know mongoose
+is gonna add in those properties automatically for us. Now to tell TS that: Hey, it's OK if we want to access the proerties it's gonna automatically add to a document for us,
+all we have to do is to now add them to UserDoc(now that you learned, you can add them).
+But for now, because we really don't USE those automatically added properties, let's remove createdAt and updatedAt from UserDoc interface, again, because 
+we don't USE them in OUR CODE(but in runtime, they are in the user document, we just didn't define them at compile time in the interface).
+
+Now add this new interface to UserModel's build method and first type param of mongoose.model() .
+
+Now we can access user's email and password. So we can access document's properties. If we didn't use UserDoc interface, we would not be able to access these proeprties safelty.
 
 ## 155-009 What's That Angle Bracket For:
 
