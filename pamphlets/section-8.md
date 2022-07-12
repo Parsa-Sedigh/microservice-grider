@@ -236,11 +236,20 @@ we don't USE them in OUR CODE(but in runtime, they are in the user document, we 
 
 Now add this new interface to UserModel's build method and first type param of mongoose.model() .
 
-Now we can access user's email and password. So we can access document's properties. If we didn't use UserDoc interface, we would not be able to access these proeprties safelty.
+Now we can access user's email and password. So we can access document's properties. If we didn't use UserDoc interface, we would not be able to access these properties safely.
 
 ## 155-009 What's That Angle Bracket For:
+When we have sth like:
+```typescript
+const User = mongoose.model<UserDoc, UserModel>('User', userSchema);
+```
+you can think of those types in angle brackets as being some arguments to the model() method, but instead of being an actual value, it's a type.
+So you can think of these as being types being provided to a function or method as arguments.
+
+Generics allow us to customize the types being used inside of a function, method, a class or an interface.
 
 ## 156-010 User Creation:
+Currently, when we send a response back when user was created(signup route), the password was included in the response which we do not want to do.
 
 ## 157-011 Proper Error Handling:
 
