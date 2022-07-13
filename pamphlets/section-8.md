@@ -252,10 +252,73 @@ Generics allow us to customize the types being used inside of a function, method
 Currently, when we send a response back when user was created(signup route), the password was included in the response which we do not want to do.
 
 ## 157-011 Proper Error Handling:
+For handling an already existing user error in signup, let's create a new custom error and rather than send back some message or response in the route handler manually, 
+we're gonna throw that custom error. This new custom error is gonna be a very general use error. 
+
+We're gonna use this custom error anytime sth goes wrong inside of request handler **due to some input that a user gave us**.
+We're gonna throw it anytime just about anything goes wrong if we don't have some reason to make other error.
+
+This is a different error than RequestValidationError, the goal of RequestValidationError is to handle output from express-validator. That is exactly and ONLY
+what this error is supposed to handle.
+
+So create a file named bad-request-error.ts .
+
+**Note:** To receive or capture the arguments that user of a class pass to that class when instantiating it, we need to define the constructor in that class and receive those 
+arguments.
+
+super() call is executed before TS jumps in and saves a reference to that property that was declared with that trick(using an identifier with property name to declare a property
+in class) on the instance of class. So we cannot use `this` inside () of super() call. But after calling super(), we can access `this`.
 
 ## 158-012 Note on Password Hashing:
+Hi!
+
+The four videos after this are all about storing a password securely with MongoDB. Given that this is a course about microservices, I do not provide a tremendous
+amount of information about the password hashing process. Instead, I give a quick review of the process, and I assume you are already familiar with it.
+
+If you are not familiar with password hashing, or if you want to save some time, I would skip over the next four videos. You will need to download the code including
+password hashing and add it to your project if you skip these videos.
+
+You can download this completed code by getting the zip file attached to the video titled Mongoose Pre-Save Hooks. Unzip the code, then drag and drop the 
+auth directory into your project directory. This will overwrite your code with the password hashing setup.
 
 ## 159-013 Reminder on Password Hashing:
+We need to hash user's password before we send it off to DB to be saved.
+
+The bad approach that we're currently doing:
+![img_2.png](../img/section-8/159-013-1.png)
+
+Currently, the user's password is in the user's collection in plain text! This is very bad, because if anyone ever got access to our mongodb DB, they would
+see all the emails and passwords of our users. Also it's possible that if some malicious person gets access to all the emails and passwords that are in DB in 
+plain text, the users of OUR app might use the SAME email and password combination to log onto many **OTHER** services and so a malicoius user could test those 
+exposed data of DB and try to to log onto for example the banking website and they might possibly succesfully login. So under no circumastance, do we ever
+store the passwords in plain text.
+
+Password hashing is a two step process that spans over signup and signin flows.
+
+This is what happens during signup(more secure implementation): 
+
+The good approach:
+![img_2.png](../img/section-8/159-013-2.png)
+
+When we hash a string, it's gonna produce a unique series of characters that are unique just for that word(that very particular string). 
+Store this hashed password and not the original plain password.
+
+With the hashed password, there's no easy way to figure out what the original password was? So if some malicious user somehow got access to
+that email password combination, in theory, hopefully, there would not be much damage done.
+
+There are some scenarios where even a hashed password can have some negative consequences and in general, we don't want anyone getting access to our data at all, 
+but if some malicious user does get access to this hashed password, it's not as big a problem.
+
+That was the signup process. How do we actually make use of hash password at some point in time in future?
+
+The signin process:
+![img_2.png](../img/section-8/159-013-3.png)
+
+As soon as we get user's email and password from the signin req, we're going to hash the password in the exact same way that we did when
+user signed up initially and we will get that same identical string of hashed password. We're then try to find a user saved inside of our DB with the
+same email as the one that was just submitted. Now at thos point, we've got the stored hashed password of the user and we've got the hash version of
+the password that the user just sent to us. We're gonna check if the hashed passwords are equal to each other, if they are equal, that means that the user
+must have supplied the correct password and then we consider him signed into our app.
 
 ## 160-014 Adding Password Hashing:
 
