@@ -321,7 +321,79 @@ the password that the user just sent to us. We're gonna check if the hashed pass
 must have supplied the correct password and then we consider him signed into our app.
 
 ## 160-014 Adding Password Hashing:
+There are many different ways of implementing password hashing.
+
+Some of the tutorials recommend that you place all this password hashing logic directly into your User model file. So in user.ts , we would
+write a lot of code to hash the password and then store it along with the user.
+We're gonna do sth similar to that, but we're gonna break our logic into two separate files. We're gonna make a separate file that has a class that is just
+responsible for taking a string and hashing it. Inside that class, we're also gonna have a method that's going to compare two different hash strings.
+
+So the majority of the actual hashing logic that actual implementation is gonna be in a separate file, in a separate class and we're gonna use that inside of User model
+file. The reason we're doing this, is to keep our User model file cleaner. That's why we're gonna  place a lot of this hashing stuff in another location.
+
+Create a folder called services and there create password.ts .
+
+What is a static method?
+
+Static methods are methods that we can access without creating an instance of the class. We can call them by saying: <class>.<static method> . So we don't use
+any `new` keyword (create a new instance of that class or use an instance) and then access the non-static method. 
+
+`scrypt` hashing function is callback based, so we use `promisify` to make it a promise based implementation to use with async await.
+
+When we scrypt, we get back a buffer which is kinda like an array with raw data inside of it.
+
+When we say:
+```typescript
+const buf = await scryptAsync(password, salt, 64);
+```
+if you look at buf, you see it's of type unkown so TS is getting a bit confused because it doesn't know what happened during the promisify process(promisifying the
+scrypt). Use type annotation on that await scriptAsync() .
+
+In `toHash` method, return the hashed result along with the `salt`.
+
+`toHash` method takes an arbitrary string, generate a salt, it's gonna hash the password along with salt and we return both the hashed password and salt concatenated by a 
+dot.
 
 ## 161-015 Comparing Hashed Password:
+In `toHash`, we're not only generating a hash password, but we're also concatenating on there at the end, separated by a dot, the salt as well. So the storedPassword
+argument of compare method is not just the hashed password, it is the `hashed password + . + salt` . 
+So by splitting it, we can get the real and actual hashed password that is stored in our DB and also salt that is generated during the initial hashing process(we store 
+the salt **along**(delimited with a dot) with hashed password in our db, so we can retrieve with from DB).
+
+In compare() we get the original password that is stord in db by splitting the stored password and also a buffer containing the newly hashed password(the one 
+user just sent to us). Now we take the buffer, turn it into a string and then compare it against the hashed password(which was in DB).
+
+In `compare` method, we see if the supplied string is equal to the one stored in DB. So along the way, we need to hash the supplied password to check it with the stored one.
+We hash the password using scryptAsync along with the salt that was stored in DB(so that the salts are equal both when we originally hash the user's password
+and also now that we want to compare the new sent password to the original one).
 
 ## 162-016 Mongoose Pre-Save Hooks:
+Let's implement some code to automatically intercept the save attempt on users collection. It's gonna take the plain text password that we've set on the user doc, hash it and
+then overwrite the password on document.
+
+Mongoose like express is in the old way of doing things. Mngoose doens't have great support out of the box for async await syntax, instead, to handle any
+kind of asyncrounous code that we want to run inside that callback of pre save hook(or other hooks), we get that `done` argument. So WE are responsible for
+calling done, once we have done all the work we need to inside there, rather than just saying `await ...` and then letting mongoose figure out what's going on,
+we HAVE TO do the awaits and then at the end, we have to call that done argument.
+
+Note: We defined that pre save middleware using function keyword, as opposed to an arrow function. It's because whenever we use a mongoose middleware function,
+we get access to the document that is being saved with `this` keyword inside of that function. If we used an arrow function for the callback of mongoose middlewares,
+then the value of `this` inside the function would be overriden(this is not a correct sentence, the correct is arrow functions don't have their own `this`) and would be actually
+instead equal to the context of that entire file as opposed to our user document, that's not what we want, so use a function with function keyword instead of 
+arrow function.
+
+In the pre save middleware, we're gonna check if we've modified the user's password. The reason for this, is that we might be retrieving the user out of the DB and 
+then trying to save them BACK into the DB at some future point in time. For example let's say we have a email change functionality. That would involve 
+us fetching a user out of the DB, then changing the email and then trying to save it to the DB again. In that scenario, we would STILL be running that pre save
+middleware. If we only change the email, we would not want to try to re-hash the password or anything like that, because that means that we would be hashing a ALREADY HASHED password.
+We don't want that. So we're only gonna attempt to hash the password if it has been `modified`.
+
+When we first create a user and assign the sent password to him, mongoose will consider password to be `modified`. So even if we're JUST CREATING that document FOR THE VERY
+FIRST TIME, `this.isModified('password')` will return true.
+
+In the past, when a user signed up, we returned his password in plain text, that was very bad, now we send back password in the hashed format.
+
+Now we're no longer storing passwords in plain text inside of our DB.
+
+After we have SAVED the user into the DB(means he just signued up), we now consider this person to be logged in. So we need to figure out how we're gonna
+actually consider a person to be logged in? We need to decide whether we want to use a cookie, a JWT, or ... .
