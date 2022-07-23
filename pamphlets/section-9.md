@@ -107,5 +107,79 @@ For the problem with updating the authentication status of users(like banning th
 
 
 ## 166-004 Solving Issues with Option #2:
+The strategy that we're gonna suggest in this vid, is not gonna be used. Because it's a tremendous of extra work but it's a viable strategy.
+
+1) In this strategy, when we send back that jwt or cookie or ..., we're gonna somehow make sure that that thing is only viable for that next 15 minutes.
+How? Well, there are mechanisms around JWT in particular, for making sure that it's really clear that this token is only viable for some set period of time.
+
+Let's now imagine what would happen if user ABC attempted to make a req to purchase some ticket through our orders service.
+
+Flow: They're gonna make a req to purchase a ticket and they're gonna supply a json web token, cookie or ... which let's say it's 30 minutes old.
+So in this scenario, we're gonna say that they have some expired jwt. So when they make this req, we're then going to ask if this person is logged in? Because we're
+following option #2, we're going to rely upon our orders service to take a look at that jwt and decide if the user is authenticated?
+So we're gonna run some logic to look at that token and critically inside this logic, we're going to add sth to say if that jwt is older than 30 minutes, then this person
+is **not** authenticated. If they have an expired token, there are **two** ways that we can deal with it easily.
+
+We can either have our orders service(and that logic for auth inside there), attempt to reach out to the auth service and get a new **refresh** token.
+So we could reach out directly with a synchronous req to the authentication service, get a refresh token and then when we respond to the overall req(purchase ticket req),
+we could **include** the new refresh token and send it back to the user ABC.
+
+That is one possible approach and would allow us to refresh the token all in one req while still acheiving the overall goal.
+
+The nice thing about this approach is that it requires us(if this token is expired), **to reach out to the auth service** and so that would be a time
+for the auth service to chime in and say: Hey, this person is banned! Don't allow them access or sth like that.
+
+![img.png](../img/section-9/166-004-1.png)
+
+2) The other strategy we can take here, if we do not want to have the synchronous communication, we could say that if the jwt is older than 30 minutes, 
+then we're just going to reject the overall req. So we could return early and send back an error and tell them: Hey, before you make a req to us,
+you need to go and refresh your token and so rather than doing the sync req ourselves, we can tell our **client** that they have to go over to the auth service(like
+logging in again which will send a req to auth service) and refresh that token on their own and once that's done(once they got the updated token), that would
+now be like 10 seconds old, now they can make the follow up req or repeat the same req again to **purchase** a ticket with the brand new refresh token.
+
+So the diagram in case the jwt was expired in this approach would be:
+![img.png](../img/section-9/166-004-2.png)
+
+So this definintely solves kind of the issue. Why kind of?
+Because we still have a window here, a window of 15 minutes where we could potentially ban a user and then they could **continue** making reqs in the window of those
+15 minutes! and so this is where it really starts to get into your personal implementation or the requirements of whay you're building.
+
+You might be building an app where that 15 minutes window is tolerable. You could even take it down to 5 minutes or 1 minute and there might be some window of 
+time that you would be happy with and saying: Yeah, if the person gets banned, they can still make reqs in the span of time, I don't care.
+
+But on more secure apps, there cannot be any period of time where a user gets banned and then can make follow up reqs and still be authenticated.
+In this case, here's what we would do:
+![img.png](../img/section-9/166-004-3.png)
+
+In this approach, we would imagine that an administrator user would make a req to ban user ABC. It would reach auth service and there we would have some
+user management logic and we would reach out to our DB and mark user ABC as not having access anymore. So they're banned as far as the auth service is concerned.
+**But** we want to reflect this change immediately with all of our services as well and we would probably want to do so using the same communication patterns
+as we've seen, in other words, using events as opposed to synchronous reqs. So here's how we would handle this:
+
+Right after we update the DB that that user is banned, we would then also emit a `user_banned` event or sth similar. It'd be some kind of event that says:
+Hey, all services out there, anyone who's listening, do not allow this user to access the app. We would send that to event bus and that event would be sent off
+to all of our different services. Then inside each of our services, we could take that info out of that event and we could persist it in some very short lived]
+cache or some kind of short-lived data store. Something to say: Hey, here's all the users who should be banned and who should revoke access to.
+
+The reason for using short-lived in memory cache, is that remember we don't really want to be storing a list for all eternity of the users who are banned.
+Users might get banned or unbanned all the time.
+
+The reason we're saying short-lived is that we can just persist this data for 15 minutes which is the same duration of time as the lifetime of these 
+JWTs, because after 15 minutes, we don't need the store anymore. After 15 minutes, our service is gonna immediately know that incoming JWTs are expired, so
+immediately they will reject the req. But within those 15 minutes, we can **temporarily** store this info that this user should be banned.
+
+So we only need to persist this list of banned users in each individual service for an amount of time equal to the lifetime of our auth mechanism.
+
+Upside to this approach is that we can immediately ban a user from all of our different services. 
+
+The downside is that we have to have some implementation in each service, for listening to that UserBanned event, storing a list of banned users for a period of time and
+then comparing whenever we run some authentication logic.
+
+![img.png](../img/section-9/166-004-4.png)
+
+So this is how we can still implement option #2 and not have any window of security issue whatsoever inside there. But we're not gonna implement this stuff. 
+So we can go with option #2 and have a very secure approach.
+
+We will start to implement option #2 in next vid.
  
 ## 167-005 Reminder on Cookies vs JWT's:
