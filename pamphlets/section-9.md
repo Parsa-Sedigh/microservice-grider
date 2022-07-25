@@ -183,3 +183,74 @@ So we can go with option #2 and have a very secure approach.
 We will start to implement option #2 in next vid.
  
 ## 167-005 Reminder on Cookies vs JWT's:
+Each service should understand what authentication is and how to determine whether or not someone is logged in?
+
+Now we're going to establish exactly how we're going to prove that a user is authenticated.
+In other words, are we using JWT or cookies or what?
+
+### difference between JWT and cookies
+Cookies:
+
+Imagine a browser making a req to a server. When the server sends a response back to the browser, it can optionally include a header of `Set-Cookie`
+and then for that `Set-Cookie` header, it can provide some kind of value. This value can be a string that contains any info that we want.
+That little piece of info is then going to be automatically stored inside the browser. Then, whenever this browser makes a follow up req to the same
+domain with the same port, the browser is going to make sure that it takes that little piece of info and appends it onto the req as a cookie header(that
+little piece of info in diagram is 'ajskdp3'). It will be automatically sent to the server.
+
+The idea of saving a cookie is that some arbitrary piece of info, doesn't really matter what this info is, it can be anything.
+That piece of info will be automatically stored by the browser and automatically sent to the server at anytime we make a followup req.
+
+![img.png](../img/section-9/167-005-1.png)
+
+### JWT:
+With a JWT, we're going to take some arbitrary piece of info that we refer to as the `payload`. It can be some object that has maybe a userId or ... any info.
+We're then going to take that payload and throw it into a json web token creation algorithm. It's then going to spit out our JWT that looks like an encoded
+string like in diagram.
+Stored in that encoded string(JWT), is that original payload. We can easily take that encoded string, throw it into some kind of decoding algo and extract
+the original object(payload). So at any point in time, we can always access the info(payload) that is stored inside the token.
+![img.png](../img/section-9/167-005-2.png)
+
+Once we have this token, we eventually do need to communicate it between the browser and server. There are a couple of different methods that we can use to do
+this communication:
+Whenever the browser makes a req to the server, it's going to want to include that JWT in one way or another so that the browser can prove that it is
+authenticated or it's logged in with this particular server.
+
+To communicate that token over to the server, some very common approaches are:
+- to include an authorization header that has the JWT inside of it(like: `Bearer <JWT>`)
+- we can just throw the entire token inside the body of the req(assuming that it's a POST req or a PUT req or a DELETE and ...)
+- or alternatively, we can also kinda mix and match here and take that JWT token and store it inside of a cookie as well. So the JWT will be managed
+  **automatically** by the browser included on all followup reqs.
+
+![img.png](../img/section-9/167-005-3.png)
+
+Differences between cookies and JWTs:
+![img.png](../img/section-9/167-005-4.png)
+
+- Cookies are a transport mechanism. They're a way of communicating info between the server and the browser and they do not necessarily do anything closely
+  coupled to authorization. Yeah, we use them for authorization, but that's not necessarily the primary purpose(goal) of them. It's not the only thing
+  they can do.
+- We can use cookies to move any kind of data between the browser and the server, so it doesn't have to be authentication related stuff, it can be tracking information,
+  it can be some kind of visit counter, just about any kind of data we can easily store inside that cookie.
+- cookies are automatically managed by the browser. We as developers, specifically on the browser side of things, don't really have to worry about managing them
+  in any way. All we have to do on the server is set a cookie and then we can pretty much guaraneteed that will always come back in all follow up reqs.
+
+JWT:
+- these are all about authentication and authorization. THat is what they are intended to serve.
+- inside of a JWT< we can store any structure of data that we want. It's traditionally going to be an object with some key value pairs.
+- JWTs have to be managed manually by developers on the frontend, unless we're storing that JWT inside of a cookie.
+
+So the cookie is just a transport mechanism. It's sth that's going to hold info. It can be any kind of info, it's not necessarily tied to authentication.
+JWTs on the other hand, traditionally always used for authentication and authorization.
+
+So we need to decide based on pros and cons, which one is more appropriate or combination of the two is most appropriate for handling auth inside of a microservices 
+architecture.
+
+## 168-006 Microservices Auth Requirements
+
+## 169-007 Issues with JWT's and Server Side Rendering:
+
+## 170-008 Cookies and Encryption
+
+## 171-009 Adding Session Support
+
+## 172-010 Generating a JWT
