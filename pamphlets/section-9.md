@@ -235,7 +235,7 @@ Differences between cookies and JWTs:
   in any way. All we have to do on the server is set a cookie and then we can pretty much guaraneteed that will always come back in all follow up reqs.
 
 JWT:
-- these are all about authentication and authorization. THat is what they are intended to serve.
+- these are all about authentication and authorization. That is what they are intended to serve.
 - inside of a JWT< we can store any structure of data that we want. It's traditionally going to be an object with some key value pairs.
 - JWTs have to be managed manually by developers on the frontend, unless we're storing that JWT inside of a cookie.
 
@@ -246,6 +246,93 @@ So we need to decide based on pros and cons, which one is more appropriate or co
 architecture.
 
 ## 168-006 Microservices Auth Requirements
+Cookies and JWTs are two very different things. The implication here, usually when we say that we're using cookie based authentication, the implication is that
+we have a cookie that is going to store some kind of encoded token inside of it and that's gonna be encrypted in some way that the user cannot access the
+information inside there.
+
+Now let's see our app requirements and see which of these two approaches is gonna satisfy those requirements.
+
+![img.png](../img/section-9/168-006-2.png)
+
+Inside of our ticket purchase logic, we probably needed to figure out whether or not that user is logged in and OK, we can use a JWT or some cookie based
+approach for this(look at green box) and then after that, we probably needed to decide whether or not this user can purchase a ticket. So maybe whether or not
+they have billing set up in their account, whether or not they have a credit card or ... . This implication that we need to somehow figure out whether or not
+this user or details about this user, really implies that our authentication mechanism needs to tell us information about the person who was just authenticated.
+In other words, we can't just have some mechanism that says: Yes, this user is authenticated or no, they're not. 
+Instead, this authentication mechanism has to tell us: Yes, this person is authenticated **and here is some information about them: here's their
+userId, there's their email, here's whether or not they have a credit card tied to their account.**
+So we need to have the ability to store info inside of our auth mechanism. This is requirement #1.
+
+Requirement #2:
+Imagine a new scenario:
+![img.png](../img/section-9/168-006-2.png)
+Imagine that our app has the ability to create free coupons. So these are coupon codes that allow people to get free tickets.
+Of course we probably do not want any arbitrary user to be able to access this route handler and start creating free tickets.
+So maybe we want to limit this route to admin users. So only admins can make a req that will create a free coupon code.
+
+In that route handler, we need to check whether or not this person is authorized to create free coupons. So we need to decide wherer or not this is an
+admin user.
+
+This step is really implying that our auth mechanism has to include some amount of authorization information. We need to know more info about this user. Are
+they user? Are they admin? What's their role?
+
+![img.png](../img/section-9/168-006-4.png)
+This diagram shows one way to solve the updating status of a use(like being banned) is to have an auth mechanism that would expire after some set of time.
+So this is implying that whatever mechanism we're going to use, it has to have a built-in way and a super secure way. In other words we would not want a 
+user to be able to tamper with this in some way of expiring our auth mechanism after a set period of time, a very precise period of time.
+
+![img.png](../img/section-9/168-006-5.png)
+One of the big benefits of using a micro services approach, is that each of our different services can be built using a different backend language.
+This is implying that whatever auth mechanism we decide to use, it has to be easily understood by many different languages.
+
+Also, given the fact that each of those different services that might be written in different languages, are going to need to somehow authenticate
+a user, we probably do not want to force any storage requirements on these services as well. In other words, if we're deciding on some auth mechanism that is going
+to require us to have some backend DB just to store info to support that auth mechanism, that would probably be bad. We don't want to force for example
+our orders service to have some kind of specialized DB to store information just to support our auth mechanism. That is not good.
+
+Summary of the requirements for our auth mechanism:
+![img.png](../img/section-9/168-006-6.png)
+
+So:
+- first we have to store information about a user like userId and ... , within the auth mechanism itself(JWT or cookie) which is closely couped with the last item.
+  So if we're storing info about that user, it has to be inside the auth mechanism and it must not require us to have some kind of backing data store.
+- with second item, we can say whether or not this person is an admin, a normal user or ... .
+- ...
+
+![img.png](../img/section-9/168-006-7.png)
+
+All these requirements are steering us towards a JWT approach. Why?
+- because JWTs can store any arbitrary information we want about a user.
+- There are even built-in properties of JWTs that lend it to a handling authorization very well.
+- JWTs can encode expiration info. you might be saying: Hey, cookies can do that as well, we can have cookies expire after a set period of time.
+  Well, not quite. We can set some expiration on a cookie but that is us kind of politely asking a browser to expire the cookie. Cookie expiration is handled
+  by the browser. So the browser is going to receive a cookie. It's going to see that we ask the browser to expire that after, say, 20 days and after
+  20 days, the browser will expire that cookie for us. **BUT!!!** a user could very easily copy that cookie info and just ignore the expiration date on there and continue
+  using that cookie in the auth mechanism or auth info inside there at some point in time in future, even beyond that expiration date. 
+  A JWT however, is going to encode the expiration time in itself and as soon as the JWT expires, then that's it. It will not be valid anymore.
+- JWTs have fantastic support between different languages. If we use solely cookie based authentication where we kind of create some kind of custom token and
+  store it inside of a cookie, it turns our that a lot of these different custom cookie implementations will vary significantly between different languages.
+  It would be kind of hard to create a cookie that is signed securely(so has some actual kind of secure or encryption around it) using nodejs and then reuse that
+  over in the ruby on rails world.
+- JWTs do not strictly require us to have some kind of backing data store to identify this user.
+  Now as opposed to cookies, you will see a lot of people who will use cookies, they're going to try to store, just say a session id inside the cookie that
+  refers to some session that is stored on a backing server. That is not strictly required. We can store again any arbitrary info we want inside of a cookie, but
+  you're gonna see that a lot of people say that in cookie based authentication, you're going to store some kind of session id and so of course that implies that
+  you will have a backing data store on the server. Which again, we probably do not want to have.
+
+So we're gonna use JWTs.
+
+We're still not done here. Remember, when we decide to use a JWT, that's not the end of the story, because JWTs are just an auth **mechanism**. They're a 
+piece of data that proves that someone is logged in and store some info about the user. We still have to somehow communicate this info between our
+browser and our server. We can do it either manually to a degree using that top yellow box(headers), or sticking it(the JWT) into the body of the req(middle yellow box),
+or we can have browser handle it for us using still this kind of cookie based idea(that bottom yellow box)!
+![img.png](../img/section-9/167-005-3.png)
+
+In the bottom box, we're saying that we're going to use a JWT token to **store**  our auth **info**, **but** the cookie is going to be the **transport** mechanism.
+THat;s how we actually move the cookie around between the browser and server(that cookie in itself has a jwt)
+
+So we still have to decide how we're going to move this token around(using one of those 3 options)?
+
 
 ## 169-007 Issues with JWT's and Server Side Rendering:
 
