@@ -307,12 +307,57 @@ that long url.
 
 
 ## 227-022 When is GetInitialProps Called
+Here's our plan:
+
+If we're making reqs from the browser, then we're gonna allow the browser to work as usual when it comes to figuring out what domain to make the req to.
+For this, we're gonna use a baseUrl of empty string in axios
+
+But if we're making a req during the server side rendering, then we need to set a base url on that req to reach out to ingress nginx directly.
+
+Now how do we know when a req is gonna be executed in the browser vs nextjs server?
+
+
+
 ![img.png](../img/section-11/227-022-1.png)
 ![img.png](../img/section-11/227-022-2.png)
 
+When does getIInitialProps gonna be executed inside the browser?
+
+![img.png](../img/section-11/227-022-3.png)
+
+
 ## 228-023 On the Server or the Browser
+
+![img.png](../img/section-11/228-023-1.png)
+![img.png](../img/section-11/228-023-2.png)
+
 ## 229-024 Ingress-Nginx Namespace and Service - Important Update
+updated 6-10-2021
+
+In the upcoming lecture, we will be adding the ingress-nginx service name and namespace to our axios request. This is more or less a reminder to
+run `kubectl get services -n ingress-nginx` as shown in the previous lecture "Cross Namespace Service Communication" to find the correct service name for your specific Kubernetes provider.
+
+At the time of writing, the service name for all platforms (Windows, Mac, Linux) and Docker clients (Docker Desktop and Minikube) should be:
+**ingress-nginx-controller**
+
 ## 230-025 Specifying the Host
+To get all of the namespaces:
+```shell
+kubectl get namespace
+```
+
+Whenever a req comes into ingres nginx, ingress nginx needs to know about the host that we're trying to reach(are we trying to reach out to tikceting.dev?).
+
+But when we're making req in this style of url: `???` there's nothing inside of this url to indicate what domain we're trying to access on ingress nginx and ingress nginx **won't**
+assume that we're trying to reach to the only host that is listed in it's config(in case there is only 1 host configured there) and you would get a 404.
+
+How do we fix this?
+
+As a second arg to axios.get, use `headers` object and there specify `HOST` property with the domain as it's value. That Host header is gonna be used by ingress nginx.
+With this, ingress nginx gonna use it's routing rules for the specified domain.
+
+Now we need to take the cookie from the incoming req that is coming to nextjs server and attach it onto the req that goes over ultimately to the related service in backend.
+
 ## 231-026 Passing Through the Cookies
 ## 232-027 A Reusable API Client
 ## 233-028 Content on the Landing Page
